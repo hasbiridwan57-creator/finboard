@@ -23,7 +23,7 @@
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
     --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;    /* #64748B Slate 500 – teks sekunder */
+    --muted-foreground: 215 16% 40%;    /* ~#566479 Slate 500 digelapkan agar kontras AA di atas #F8FAFC (PRD §12) */
     --accent: 210 40% 96%;
     --accent-foreground: 222 47% 11%;
     --destructive: 0 72% 51%;           /* #DC2626 Red 600 */
