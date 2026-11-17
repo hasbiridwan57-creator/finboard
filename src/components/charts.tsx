@@ -1,6 +1,7 @@
 "use client";
 
 /** Kumpulan 5 chart interaktif (PRD FR-CHR). Semua pakai Recharts + ResponsiveContainer. */
+import { useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -99,23 +100,73 @@ export function RevenueBudgetChart({ data }: { data: MonthlyPoint[] }) {
   );
 }
 
-/** 3. Profit by Category (Vertical Bar) — PRD FR-CHR-3 */
+/** 3. Profit by Category (Vertical Bar + toggle Donut jika >6) — PRD FR-CHR-3 */
 export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
+  const [chartType, setChartType] = useState<"bar" | "donut">("bar");
+
   if (data.length === 0) return <ChartCard title="Profit per Kategori"><EmptyChart msg="Kolom kategori tidak tersedia." /></ChartCard>;
+
+  const showToggle = data.length > 6;
+
   return (
     <ChartCard title="Profit per Kategori">
+      {showToggle && (
+        <div className="mb-3 flex justify-end">
+          <div className="inline-flex rounded-lg border border-surface-border bg-background p-0.5">
+            <button
+              onClick={() => setChartType("bar")}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                chartType === "bar"
+                  ? "bg-surface text-foreground shadow-card"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Bar
+            </button>
+            <button
+              onClick={() => setChartType("donut")}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                chartType === "donut"
+                  ? "bg-surface text-foreground shadow-card"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Donut
+            </button>
+          </div>
+        </div>
+      )}
       <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-          <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} interval={0} />
-          <YAxis tickFormatter={(v) => formatRupiah(v)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={70} />
-          <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f1f5f9" }} />
-          <Bar dataKey="value" name="Profit" radius={[4, 4, 0, 0]}>
-            {data.map((d, i) => (
-              <Cell key={i} fill={d.value >= 0 ? "#2563eb" : "#dc2626"} />
-            ))}
-          </Bar>
-        </BarChart>
+        {chartType === "donut" && showToggle ? (
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              innerRadius="55%"
+              outerRadius="80%"
+              paddingAngle={2}
+            >
+              {data.map((d, i) => (
+                <Cell key={i} fill={d.value >= 0 ? CHART_COLORS[i % CHART_COLORS.length] : "#dc2626"} />
+              ))}
+            </Pie>
+            <Tooltip content={<ChartTooltip valueFormatter={(v) => `${formatRupiah(v)} (${formatPercent((v / data.reduce((s, d) => s + d.value, 0)) * 100)})`} />} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+          </PieChart>
+        ) : (
+          <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} interval={0} />
+            <YAxis tickFormatter={(v) => formatRupiah(v)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={70} />
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f1f5f9" }} />
+            <Bar dataKey="value" name="Profit" radius={[4, 4, 0, 0]}>
+              {data.map((d, i) => (
+                <Cell key={i} fill={d.value >= 0 ? "#2563eb" : "#dc2626"} />
+              ))}
+            </Bar>
+          </BarChart>
+        )}
       </ResponsiveContainer>
     </ChartCard>
   );
