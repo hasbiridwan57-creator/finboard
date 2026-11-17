@@ -91,9 +91,9 @@ export default function UploadView() {
 
         <button
           onClick={loadDemo}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-surface-border bg-white px-4 py-3 text-sm font-semibold text-foreground shadow-card transition-colors hover:border-primary/50 hover:text-primary cursor-pointer"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-blue-50/60 px-4 py-3 text-sm font-semibold text-primary shadow-card transition-colors hover:border-primary/60 hover:bg-blue-50 cursor-pointer"
         >
-          <Sparkles className="h-4 w-4 text-primary" />
+          <Sparkles className="h-4 w-4" />
           Coba dengan Dataset Demo (360 transaksi)
         </button>
 

@@ -26,6 +26,15 @@ import ChartTooltip from "./ChartTooltip";
 
 const CHART_COLORS = ["#2563eb", "#0ea5e9", "#16a34a", "#f59e0b", "#6366f1"];
 
+/**
+ * Formatter ringkas khusus Y-axis agar label tak terlipat dua baris.
+ * "Rp 1,05 M" (formatRupiah penuh) terlalu panjang untuk kolom sempit,
+ * jadi Y-axis buang prefiks "Rp " saja, pertahankan satuan (jt/rb/M).
+ */
+function yAxisFormat(value: number): string {
+  return formatRupiah(value).replace("Rp ", "");
+}
+
 function EmptyChart({ msg }: { msg: string }) {
   return (
     <div className="flex h-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">
@@ -68,7 +77,7 @@ export function RevenueExpenseChart({ data }: { data: MonthlyPoint[] }) {
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={(v) => formatRupiah(v)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={70} />
+          <YAxis tickFormatter={yAxisFormat} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
           <Tooltip content={<ChartTooltip />} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#2563eb" strokeWidth={2} fill="url(#revGrad)" />
@@ -89,7 +98,7 @@ export function RevenueBudgetChart({ data }: { data: MonthlyPoint[] }) {
         <ComposedChart data={withBudget} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={(v) => formatRupiah(v)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={70} />
+          <YAxis tickFormatter={yAxisFormat} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
           <Tooltip content={<ChartTooltip />} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar dataKey="revenue" name="Revenue Aktual" fill="#2563eb" radius={[4, 4, 0, 0]} />
@@ -155,10 +164,19 @@ export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
             <Legend wrapperStyle={{ fontSize: 11 }} />
           </PieChart>
         ) : (
-          <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+          <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 45 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} interval={0} />
-            <YAxis tickFormatter={(v) => formatRupiah(v)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={70} />
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 11, fill: "#64748b" }}
+              tickLine={false}
+              axisLine={false}
+              interval={0}
+              angle={-25}
+              textAnchor="end"
+              height={50}
+            />
+            <YAxis tickFormatter={yAxisFormat} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f1f5f9" }} />
             <Bar dataKey="value" name="Profit" radius={[4, 4, 0, 0]}>
               {data.map((d, i) => (
@@ -180,8 +198,8 @@ export function DepartmentProfitChart({ data }: { data: DimensionPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={data} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-          <XAxis type="number" tickFormatter={(v) => formatRupiah(v)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
-          <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={150} />
+          <XAxis type="number" tickFormatter={yAxisFormat} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={170} />
           <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f1f5f9" }} />
           <Bar dataKey="value" name="Profit" radius={[0, 4, 4, 0]} barSize={20}>
             {data.map((d, i) => (

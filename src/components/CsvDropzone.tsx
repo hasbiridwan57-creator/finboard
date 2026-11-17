@@ -7,7 +7,7 @@
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { UploadCloud, FileWarning, Loader2 } from "lucide-react";
-import { parseCsv, validateFile, MAX_FILE_SIZE } from "@/lib/csvParser";
+import { parseCsv, validateFile } from "@/lib/csvParser";
 import { isMappingSufficient } from "@/lib/columnMapper";
 import { setRawCsv } from "@/lib/sessionCsv";
 import { useFinBoardStore } from "@/store/finBoardStore";
@@ -89,15 +89,15 @@ export default function CsvDropzone({ onParsed, onParsingStart, onParsingError }
         onDrop={onDrop}
         onDragOver={onDragOver}
         onDragLeave={() => setIsDragging(false)}
-        className={`group flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed bg-white px-6 py-12 text-center cursor-pointer transition-colors shadow-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+        className={`group flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed bg-white px-6 py-8 text-center cursor-pointer transition-colors shadow-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
           isDragging ? "border-primary bg-blue-50/50" : "border-surface-border hover:border-primary/50"
         }`}
       >
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-primary transition-transform group-hover:scale-105">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-primary transition-transform group-hover:scale-105">
           {loading ? (
-            <Loader2 className="h-7 w-7 animate-spin" />
+            <Loader2 className="h-6 w-6 animate-spin" />
           ) : (
-            <UploadCloud className="h-7 w-7" />
+            <UploadCloud className="h-6 w-6" />
           )}
         </div>
         <div>
@@ -136,10 +136,6 @@ export default function CsvDropzone({ onParsed, onParsingStart, onParsingError }
           </div>
         </div>
       )}
-
-      <p className="mt-3 text-center text-xs text-muted-foreground">
-        Maksimal {Math.round(MAX_FILE_SIZE / 1_048_576)} MB per file
-      </p>
     </div>
   );
 }
