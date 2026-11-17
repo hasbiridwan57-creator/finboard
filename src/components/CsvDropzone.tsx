@@ -82,7 +82,6 @@ export default function CsvDropzone({ onParsed, onParsingStart, onParsingError }
       <div
         role="button"
         tabIndex={0}
-        aria-label="Unggah file CSV"
         onClick={() => inputRef.current?.click()}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") inputRef.current?.click();

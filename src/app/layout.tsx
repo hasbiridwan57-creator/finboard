@@ -20,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="id" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
-        {children}
+        <main className="flex flex-1 flex-col">{children}</main>
         <Toaster position="top-right" richColors />
       </body>
     </html>
