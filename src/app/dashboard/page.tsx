@@ -107,19 +107,15 @@ function DashboardContent() {
           />
         </div>
 
-        {/* Charts Row 1 */}
+        {/* Charts Row 1: Tren bulanan + Budget kondisional (PRD §8.2) */}
         <div className="grid gap-6 lg:grid-cols-2">
           <RevenueExpenseChart data={monthly} />
-          {budgetAvailable ? (
-            <RevenueBudgetChart data={monthly} />
-          ) : (
-            <CategoryProfitChart data={categoryData} />
-          )}
+          {budgetAvailable && <RevenueBudgetChart data={monthly} />}
         </div>
 
-        {/* Charts Row 2 */}
+        {/* Charts Row 2: Dimensi (Category/Dept/Channel) sesuai PRD §8.2 wireframe */}
         <div className="grid gap-6 lg:grid-cols-3">
-          {budgetAvailable && <CategoryProfitChart data={categoryData} />}
+          <CategoryProfitChart data={categoryData} />
           <DepartmentProfitChart data={deptData} />
           <ChannelProfitChart data={channelData} />
         </div>
