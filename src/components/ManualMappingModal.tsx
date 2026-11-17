@@ -3,10 +3,19 @@
 /**
  * ManualMappingModal (PRD FR-PRS-06, US-03).
  * Fallback ketika heuristik gagal mendeteksi kolom wajib.
+ * Dibangun di atas komponen Dialog shadcn/ui.
  */
 import { useMemo, useState } from "react";
-import Papa from "papaparse";
-import { AlertTriangle, Check, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, Check } from "lucide-react";
 import type { CanonicalField, ColumnMapping } from "@/lib/types";
 import { isMappingSufficient } from "@/lib/columnMapper";
 import { reparseWithMapping } from "@/lib/sessionCsv";
@@ -56,33 +65,17 @@ export default function ManualMappingModal({ open, headers, initialMapping, onCl
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Sesuaikan Pemetaan Kolom"
-        className="w-full max-w-2xl rounded-xl border border-surface-border bg-white shadow-lg"
-      >
-        <div className="flex items-center justify-between border-b border-surface-border px-6 py-4">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Sesuaikan Pemetaan Kolom</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Pilih kolom CSV yang sesuai untuk setiap field di bawah.
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Tutup"
-            className="rounded-lg p-2 text-muted-foreground hover:bg-slate-100 hover:text-foreground"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Sesuaikan Pemetaan Kolom</DialogTitle>
+          <DialogDescription>
+            Pilih kolom CSV yang sesuai untuk setiap field di bawah.
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
+        <div className="max-h-[60vh] overflow-y-auto">
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELD_ORDER.map((field) => {
               const meta = FIELD_LABELS[field];
@@ -102,7 +95,7 @@ export default function ManualMappingModal({ open, headers, initialMapping, onCl
                     onChange={(e) =>
                       setMapping((m) => ({ ...m, [field]: e.target.value || null }))
                     }
-                    className="mt-1.5 w-full rounded-lg border border-surface-border bg-white px-3 py-2 text-sm text-foreground focus:outline focus:outline-2 focus:outline-primary"
+                    className="mt-1.5 w-full rounded-lg border border-surface-border bg-white px-3 py-2 text-sm text-foreground focus:outline focus:outline-2 focus:outline-ring"
                   >
                     <option value="">— Tidak dipakai —</option>
                     {headers.map((h) => (
@@ -124,7 +117,7 @@ export default function ManualMappingModal({ open, headers, initialMapping, onCl
                 <table className="w-full text-xs">
                   <tbody>
                     {preview.map((t, i) => (
-                      <tr key={i} className={i % 2 ? "bg-slate-50" : ""}>
+                      <tr key={i} className={i % 2 ? "bg-secondary" : ""}>
                         <td className="px-3 py-2 tabular-nums">{t.date}</td>
                         <td className="px-3 py-2 tabular-nums">Rp {t.revenue.toLocaleString("id-ID")}</td>
                         <td className="px-3 py-2 tabular-nums">Rp {t.expenses.toLocaleString("id-ID")}</td>
@@ -138,29 +131,22 @@ export default function ManualMappingModal({ open, headers, initialMapping, onCl
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-surface-border px-6 py-4">
+        <DialogFooter className="flex items-center justify-between gap-3 sm:justify-between">
           <p className={`text-sm ${sufficient ? "text-success" : "text-danger"}`}>
             {sufficient
               ? "Kolom wajib sudah lengkap ✓"
               : "Kolom Tanggal + Pendapatan + (Pengeluaran atau Laba) wajib diisi."}
           </p>
           <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="rounded-lg border border-surface-border px-4 py-2 text-sm font-medium text-foreground hover:bg-slate-50"
-            >
+            <Button variant="outline" onClick={onClose}>
               Batal
-            </button>
-            <button
-              onClick={handleApply}
-              disabled={!sufficient}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
-            >
+            </Button>
+            <Button onClick={handleApply} disabled={!sufficient}>
               Terapkan
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

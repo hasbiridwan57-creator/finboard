@@ -14,6 +14,7 @@ import Link from "next/link";
 import { BarChart3, Sparkles } from "lucide-react";
 import CsvDropzone from "@/components/CsvDropzone";
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
+import { Button } from "@/components/ui/button";
 import { useFinBoardStore } from "@/store/finBoardStore";
 import { setRawCsv } from "@/lib/sessionCsv";
 import { generateDemoCsv } from "@/lib/demoDataset";
@@ -89,13 +90,14 @@ export default function UploadView() {
           <div className="h-px flex-1 bg-surface-border" />
         </div>
 
-        <button
+        <Button
+          variant="outline"
           onClick={loadDemo}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-blue-50/60 px-4 py-3 text-sm font-semibold text-primary shadow-card transition-colors hover:border-primary/60 hover:bg-blue-50 cursor-pointer"
+          className="w-full gap-2 border-primary/30 bg-blue-50/60 text-primary shadow-card hover:border-primary/60 hover:bg-blue-50"
         >
           <Sparkles className="h-4 w-4" />
           Coba dengan Dataset Demo (360 transaksi)
-        </button>
+        </Button>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Data Anda tidak pernah dikirim ke server mana pun.{" "}

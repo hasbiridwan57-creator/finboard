@@ -3,13 +3,24 @@
 /**
  * GlobalFilterBar (PRD FR-FLT-01 s.d. FR-FLT-04).
  * Date range + preset + 3 multi-select (Kategori, Departemen, Channel) + Reset.
+ * Dibangun di atas komponen shadcn/ui: Popover, Command, Checkbox, Button.
  * Perubahan apa pun → store → seluruh komponen ikut berubah.
  */
-import { useState, useRef, useEffect } from "react";
-import { Calendar, ChevronDown, Check, X, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { useState } from "react";
+import { CalendarIcon, Check, ChevronDown, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useFinBoardStore } from "@/store/finBoardStore";
 import { uniqueValues } from "@/lib/chartAggregator";
-import { formatRupiah } from "@/lib/format";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 function formatDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -54,78 +65,64 @@ const PRESETS: Preset[] = [
 
 function DateRangeControl({ min, max }: { min: string; max: string }) {
   const { filter, setFilter } = useFinBoardStore();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
 
   const from = filter.dateRange.from ?? min;
   const to = filter.dateRange.to ?? max;
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-lg border border-surface-border bg-white px-3 py-2 text-sm text-foreground hover:border-primary/50 cursor-pointer"
-      >
-        <Calendar className="h-4 w-4 text-muted-foreground" />
-        <span className="tabular-nums">
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className="gap-2 tabular-nums"
+        >
+          <CalendarIcon className="h-4 w-4 text-muted-foreground" />
           {formatDate(from)} – {formatDate(to)}
-        </span>
-        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-      </button>
-
-      {open && (
-        <div className="absolute z-40 mt-1 w-72 rounded-xl border border-surface-border bg-white p-3 shadow-lg">
-          <div className="grid grid-cols-2 gap-2">
-            {PRESETS.map((p) => {
-              const r = p.compute(min, max);
-              const active = r && r.from === from && r.to === to;
-              return (
-                <button
-                  key={p.label}
-                  onClick={() => {
-                    if (r) setFilter({ dateRange: { from: r.from, to: r.to } });
-                    setOpen(false);
-                  }}
-                  className={`rounded-lg px-3 py-2 text-xs font-medium text-left cursor-pointer ${
-                    active ? "bg-primary text-white" : "bg-slate-50 text-foreground hover:bg-blue-50"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-3 space-y-2 border-t border-surface-border pt-3">
-            <label className="block text-xs font-medium text-muted-foreground">Dari</label>
-            <input
-              type="date"
-              value={from}
-              min={min}
-              max={max}
-              onChange={(e) => setFilter({ dateRange: { ...filter.dateRange, from: e.target.value } })}
-              className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm tabular-nums focus:outline focus:outline-2 focus:outline-primary"
-            />
-            <label className="block text-xs font-medium text-muted-foreground">Sampai</label>
-            <input
-              type="date"
-              value={to}
-              min={min}
-              max={max}
-              onChange={(e) => setFilter({ dateRange: { ...filter.dateRange, to: e.target.value } })}
-              className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm tabular-nums focus:outline focus:outline-2 focus:outline-primary"
-            />
-          </div>
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-3">
+        <div className="grid grid-cols-2 gap-2">
+          {PRESETS.map((p) => {
+            const r = p.compute(min, max);
+            const active = r && r.from === from && r.to === to;
+            return (
+              <Button
+                key={p.label}
+                size="sm"
+                variant={active ? "default" : "secondary"}
+                onClick={() => {
+                  if (r) setFilter({ dateRange: { from: r.from, to: r.to } });
+                }}
+                className="justify-start"
+              >
+                {p.label}
+              </Button>
+            );
+          })}
         </div>
-      )}
-    </div>
+        <div className="mt-3 space-y-2 border-t border-surface-border pt-3">
+          <label className="block text-xs font-medium text-muted-foreground">Dari</label>
+          <input
+            type="date"
+            value={from}
+            min={min}
+            max={max}
+            onChange={(e) => setFilter({ dateRange: { ...filter.dateRange, from: e.target.value } })}
+            className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm tabular-nums focus:outline focus:outline-2 focus:outline-ring"
+          />
+          <label className="block text-xs font-medium text-muted-foreground">Sampai</label>
+          <input
+            type="date"
+            value={to}
+            min={min}
+            max={max}
+            onChange={(e) => setFilter({ dateRange: { ...filter.dateRange, to: e.target.value } })}
+            className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm tabular-nums focus:outline focus:outline-2 focus:outline-ring"
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -140,19 +137,6 @@ function MultiSelect({
   selected: string[];
   onChange: (v: string[]) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  const filtered = values.filter((v) => v.toLowerCase().includes(search.toLowerCase()));
   const allSelected = selected.length === values.length;
 
   const toggle = (v: string) => {
@@ -160,65 +144,54 @@ function MultiSelect({
   };
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-lg border border-surface-border bg-white px-3 py-2 text-sm text-foreground hover:border-primary/50 cursor-pointer"
-      >
-        <span className="text-muted-foreground">{label}:</span>
-        <span className="font-medium">
-          {selected.length === 0 ? "Semua" : selected.length === 1 ? selected[0] : `${selected.length} dipilih`}
-        </span>
-        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-      </button>
-
-      {open && (
-        <div className="absolute z-40 mt-1 w-56 rounded-xl border border-surface-border bg-white shadow-lg">
-          <div className="border-b border-surface-border p-2">
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari…"
-              className="w-full rounded-lg border border-surface-border px-3 py-1.5 text-sm focus:outline focus:outline-2 focus:outline-primary"
-            />
-          </div>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="gap-2">
+          <span className="text-muted-foreground">{label}:</span>
+          <span className="font-medium">
+            {selected.length === 0 ? "Semua" : selected.length === 1 ? selected[0] : `${selected.length} dipilih`}
+          </span>
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-0">
+        <Command>
+          <CommandInput placeholder="Cari…" />
           <div className="flex items-center justify-between border-b border-surface-border px-3 py-2 text-xs">
-            <button
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-primary"
               onClick={() => onChange(allSelected ? [] : [...values])}
-              className="font-medium text-primary hover:underline cursor-pointer"
             >
               {allSelected ? "Hapus Semua" : "Pilih Semua"}
-            </button>
+            </Button>
             <span className="text-muted-foreground">{values.length} opsi</span>
           </div>
-          <div className="max-h-48 overflow-y-auto p-1">
-            {filtered.map((v) => {
-              const checked = selected.includes(v);
-              return (
-                <button
-                  key={v}
-                  onClick={() => toggle(v)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-slate-50 cursor-pointer"
-                >
-                  <span
-                    className={`flex h-4 w-4 items-center justify-center rounded border ${
-                      checked ? "border-primary bg-primary text-white" : "border-surface-border"
-                    }`}
-                  >
-                    {checked && <Check className="h-3 w-3" />}
-                  </span>
-                  {v}
-                </button>
-              );
-            })}
-            {filtered.length === 0 && (
-              <p className="px-2 py-3 text-center text-xs text-muted-foreground">Tidak ditemukan</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+          <CommandList className="max-h-48">
+            <CommandEmpty>Tidak ditemukan</CommandEmpty>
+            <CommandGroup>
+              {values.map((v) => {
+                const checked = selected.includes(v);
+                return (
+                  <CommandItem key={v} onSelect={() => toggle(v)}>
+                    <span
+                      className={cn(
+                        "flex h-4 w-4 items-center justify-center rounded border",
+                        checked ? "border-primary bg-primary text-white" : "border-surface-border"
+                      )}
+                    >
+                      {checked && <Check className="h-3 w-3" />}
+                    </span>
+                    {v}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -241,11 +214,6 @@ export default function GlobalFilterBar() {
     filter.channels.length > 0 ||
     filter.dateRange.from !== null ||
     filter.dateRange.to !== null;
-
-  const activeCount =
-    (filter.categories.length > 0 ? 1 : 0) +
-    (filter.departments.length > 0 ? 1 : 0) +
-    (filter.channels.length > 0 ? 1 : 0);
 
   return (
     <div className="sticky top-16 z-30 border-b border-surface-border bg-background/95 backdrop-blur">
@@ -277,13 +245,14 @@ export default function GlobalFilterBar() {
           />
         )}
         {isFiltered && (
-          <button
+          <Button
+            variant="outline"
             onClick={resetFilter}
-            className="ml-auto flex items-center gap-1.5 rounded-lg border border-surface-border bg-white px-3 py-2 text-sm font-medium text-danger hover:bg-danger-soft cursor-pointer"
+            className="ml-auto gap-1.5 text-danger hover:bg-danger-soft hover:text-danger"
           >
             <RotateCcw className="h-4 w-4" />
             Reset Filter
-          </button>
+          </Button>
         )}
       </div>
     </div>
