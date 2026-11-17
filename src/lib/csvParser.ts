@@ -71,20 +71,26 @@ export function parseCsv(
       cleanedInRow = true;
     };
 
-    const rev = toNumberOrZero(revenue ? row[revenue] : "0", markClean);
+    let rev = toNumberOrZero(revenue ? row[revenue] : "0", markClean);
     let exp = expenses ? toNumberOrZero(row[expenses], markClean) : 0;
     let prof = profit ? toNumberOrZero(row[profit], markClean) : 0;
 
     // Derivasi kolom keuangan (PRD FR-PRS-05) — basisnya ada/tidaknya KOLOM dipetakan.
-    if (!expenses && profit) {
+    if (!revenue && expenses && profit) {
+      // Kolom Revenue tidak ada, tapi Expenses & Profit ada → Revenue = Profit + Expenses
+      rev = prof + exp;
+    } else if (!expenses && profit) {
       // Tidak ada kolom Expenses, tapi ada Profit → Expenses = Revenue - Profit
       exp = rev - prof;
     } else if (!profit && expenses) {
       // Tidak ada kolom Profit, tapi ada Expenses → Profit = Revenue - Expenses
       prof = rev - exp;
     }
-    // Catatan: mapping wajib menjamin minimal salah satu dari expenses/profit ada
-    // (divalidasi via isMappingSufficient sebelum parse).
+    // Catatan: heuristik memetakan revenue dari kata kunci umum (revenue/omzet/sales/
+    // pendapatan/pemasukan, dst.). Jika nama kolom revenue sangat tidak standar dan
+    // gagal terdeteksi, isMappingSufficient() = false → modal mapping manual terbuka,
+    // di mana user memilih kolom revenue secara eksplisit. Kasus turunan `!revenue`
+    // di atas adalah lapisan pengaman matematika (PRD: minimal 2 dari 3 kolom keuangan).
 
     const budgetVal = budget ? toNumberOrZero(row[budget], markClean) : null;
 

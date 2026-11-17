@@ -5,7 +5,7 @@ import type { CanonicalField, ColumnMapping } from "./types";
 
 const SYNONYMS: Record<CanonicalField, string[]> = {
   date: ["date", "tanggal", "tgl", "transaction date", "tanggal transaksi", "period", "periode", "bulan", "month", "waktu", "created at"],
-  revenue: ["revenue", "pendapatan", "sales", "penjualan", "omzet", "omset", "income", "pemasukan", "gross sales", "total sales", "turnover"],
+  revenue: ["revenue", "pendapatan", "sales", "penjualan", "jual", "nilai jual", "omzet", "omset", "income", "pemasukan", "gross sales", "total sales", "turnover"],
   expenses: ["expense", "expenses", "pengeluaran", "biaya", "cost", "costs", "cogs", "beban", "opex", "spending", "outflow"],
   profit: ["profit", "laba", "net profit", "laba bersih", "gross profit", "laba kotor", "margin", "keuntungan", "net income", "ebitda"],
   category: ["category", "kategori", "product category", "kategori produk", "jenis", "type", "segment", "segmen", "divisi produk", "item"],
@@ -38,13 +38,16 @@ export function autoMapColumns(headers: string[]): ColumnMapping {
     }
   }
 
-  // Pass 2: partial match (includes), hanya untuk field yang belum terpetakan
+  // Pass 2: partial match — sinonim muncul DI DALAM nama header (satu arah).
+  // Sengaja TIDAK dua-arah (h.norm.includes(syn) saja) untuk mencegah false positive,
+  // mis. header "Total" salah terpilih sebagai revenue karena "total sales".includes("total").
+  // Sinonim pendek (< 4 char) dikecualikan agar tak memicu kecocokan tak sengaja.
   for (const field of ALL_FIELDS) {
     if (mapping[field]) continue;
     const hit = normalized.find(
       (h) =>
         !used.has(h.raw) &&
-        SYNONYMS[field].some((syn) => h.norm.includes(syn) || syn.includes(h.norm)),
+        SYNONYMS[field].some((syn) => syn.length >= 4 && h.norm.includes(syn)),
     );
     if (hit) {
       mapping[field] = hit.raw;
