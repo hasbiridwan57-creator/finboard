@@ -14,9 +14,13 @@ import { useFinBoardStore } from "@/store/finBoardStore";
 
 interface Props {
   onParsed: () => void;
+  /** Dipanggil saat parsing mulai, untuk memicu skeleton screen di parent (PRD §8.3). */
+  onParsingStart?: () => void;
+  /** Dipanggil saat parsing gagal, agar parent menyembunyikan skeleton. */
+  onParsingError?: () => void;
 }
 
-export default function CsvDropzone({ onParsed }: Props) {
+export default function CsvDropzone({ onParsed, onParsingStart, onParsingError }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,6 +39,8 @@ export default function CsvDropzone({ onParsed }: Props) {
         return;
       }
       setLoading(true);
+      // Beri sinyal ke parent untuk menampilkan skeleton screen (PRD §8.3).
+      onParsingStart?.();
       try {
         const text = await file.text();
         const ds = parseCsv(text, file.name);
@@ -50,11 +56,13 @@ export default function CsvDropzone({ onParsed }: Props) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Gagal memproses file CSV.";
         toast.error("Gagal memproses CSV", { description: msg });
+        // Sembunyikan skeleton lagi agar user kembali ke layar upload (PRD §8.3 error state).
+        onParsingError?.();
       } finally {
         setLoading(false);
       }
     },
-    [onParsed, setDataset, setNeedsManualMapping],
+    [onParsed, onParsingError, onParsingStart, setDataset, setNeedsManualMapping],
   );
 
   const onDrop = (e: React.DragEvent) => {
