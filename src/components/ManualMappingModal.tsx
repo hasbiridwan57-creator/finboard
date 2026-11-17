@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Check } from "lucide-react";
+import { toast } from "sonner";
 import type { CanonicalField, ColumnMapping } from "@/lib/types";
 import { isMappingSufficient } from "@/lib/columnMapper";
 import { reparseWithMapping } from "@/lib/sessionCsv";
@@ -46,6 +47,7 @@ interface Props {
 
 export default function ManualMappingModal({ open, headers, initialMapping, onClose }: Props) {
   const [mapping, setMapping] = useState<ColumnMapping>(initialMapping);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const { setDataset } = useFinBoardStore();
 
   // 3 baris pertama untuk pratinjau (PRD US-03).
@@ -64,10 +66,22 @@ export default function ManualMappingModal({ open, headers, initialMapping, onCl
   const sufficient = isMappingSufficient(mapping);
 
   const handleApply = () => {
-    const raw = reparseWithMapping(mapping);
-    if (raw) {
-      setDataset(raw);
-      onClose();
+    try {
+      const raw = reparseWithMapping(mapping);
+      if (raw) {
+        setApplyError(null);
+        setDataset(raw);
+        onClose();
+      } else {
+        setApplyError("Gagal membaca data. Pastikan kolom tanggal valid dan kolom wajib sudah dipilih.");
+        toast.error("Gagal memproses pemetaan", {
+          description: "Periksa kembali pilihan kolom Tanggal dan kolom keuangan.",
+        });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Terjadi kesalahan saat membaca CSV.";
+      setApplyError(msg);
+      toast.error("Gagal memproses pemetaan", { description: msg });
     }
   };
 
@@ -136,6 +150,13 @@ export default function ManualMappingModal({ open, headers, initialMapping, onCl
             </div>
           )}
         </div>
+
+        {applyError && (
+          <div className="mt-4 flex items-start gap-2 rounded-lg border border-danger-border bg-danger-soft px-3 py-2 text-xs text-danger">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+            <span>{applyError}</span>
+          </div>
+        )}
 
         <DialogFooter className="flex items-center justify-between gap-3 sm:justify-between">
           <p className={`text-sm ${sufficient ? "text-success" : "text-danger"}`}>

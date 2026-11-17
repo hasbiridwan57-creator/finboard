@@ -18,10 +18,17 @@ function buildIso(y: number, m: number, d: number): string | null {
   return `${y}-${pad2(m)}-${pad2(d)}`;
 }
 
+/** Hapus bagian jam/timestamp di belakang tanggal (mis. "2026-01-15 14:30:00" → "2026-01-15"). */
+function stripTime(raw: string): string {
+  // Pisahkan pada spasi atau huruf 'T' (pemisah tanggal-waktu ISO).
+  const m = raw.match(/^([^ T]+)/);
+  return m ? m[1] : raw;
+}
+
 /** Coba parse satu string tanggal. Mengembalikan ISO "YYYY-MM-DD" atau null. */
 export function parseDate(raw: string, preferDayFirst = false): string | null {
   if (!raw) return null;
-  const s = raw.trim();
+  const s = stripTime(raw.trim());
   if (!s) return null;
 
   // ISO: YYYY-MM-DD atau YYYY/MM/DD
@@ -52,7 +59,7 @@ export function parseDate(raw: string, preferDayFirst = false): string | null {
  */
 export function detectDayFirst(samples: string[]): boolean {
   for (const raw of samples) {
-    const m = raw?.trim().match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    const m = stripTime(raw?.trim() ?? "").match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
     if (m) {
       const a = Number(m[1]);
       const b = Number(m[2]);

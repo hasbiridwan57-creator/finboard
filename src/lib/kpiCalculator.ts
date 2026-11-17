@@ -48,19 +48,6 @@ function dateBounds(txs: NormalizedTransaction[]): { min: string; max: string } 
   return { min, max };
 }
 
-/** Kumpulan bulan kalender unik (YYYY-MM) dari transaksi. */
-function uniqueMonths(txs: NormalizedTransaction[]): string[] {
-  const set = new Set<string>();
-  for (const t of txs) set.add(t.monthKey);
-  return Array.from(set).sort();
-}
-
-function monthAdd(ym: string, delta: number): string {
-  const [y, m] = ym.split("-").map(Number);
-  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
 /** Tambah hari ke tanggal ISO. */
 function addDaysIso(iso: string, days: number): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -74,10 +61,13 @@ function pctChange(current: number, previous: number): number | null {
 }
 
 /**
- * Hitung delta periode-atas-periode.
- * - Jika rentang mencakup ≥ 2 bulan kalender: bandingkan bulan penuh terakhir vs bulan sebelumnya (MoM).
- * - Jika rentang kustom < 1 bulan: bandingkan rentang aktif vs rentang berdurasi sama sebelumnya (jika ada data).
- * - Jika hanya 1 periode: kembalikan null (PRD US-04).
+ * Hitung delta periode-atas-periode (apple-to-apple berbasis JUMLAH HARI).
+ *
+ * Selalu bandingkan rentang hari aktif [from, to] (inklusif) terhadap rentang
+ * berdurasi hari SAMA persis di periode sebelumnya, berapa pun bulan kalender
+ * yang tercakup. Ini menutup edge case: filter tanggal yang memotong sebagian
+ * bulan (mis. mulai tanggal 7) tak lagi dibandingkan melawan 1 bulan penuh,
+ * melainkan melawan durasi hari yang setara (PRD FR-KPI-01, FR-FLT-02).
  */
 export function computeDeltas(
   filtered: NormalizedTransaction[],
@@ -90,13 +80,13 @@ export function computeDeltas(
   const bounds = dateBounds(filtered);
   if (!bounds) return empty;
 
-  const months = uniqueMonths(filtered);
-  let currentTxs: NormalizedTransaction[];
-  let previousTxs: NormalizedTransaction[];
+  // Rentang hari aktif yang benar-benar berisi data (inklusif).
+  const from = bounds.min;
+  const to = bounds.max;
 
   // Periode sebelumnya diambil dari fullDataset, TAPI tetap harus menghormati filter
   // dimensi aktif (kategori/departemen/kanal) — hanya sumbu TANGGAL yang digeser ke
-  // periode sebelumnya (PRD FR-KPI-01: perbandingan apples-to-apples pada segmen sama).
+  // periode sebelumnya (PRD FR-KPI-01: apples-to-apples pada segmen yang sama).
   const dimFiltered = fullDataset.filter(
     (t) =>
       (filter.categories.length === 0 || filter.categories.includes(t.category)) &&
@@ -104,30 +94,17 @@ export function computeDeltas(
       (filter.channels.length === 0 || filter.channels.includes(t.channel)),
   );
 
-  if (months.length >= 2) {
-    // MoM: bulan penuh terakhir vs bulan sebelumnya
-    const lastMonth = months[months.length - 1];
-    const prevMonth = monthAdd(lastMonth, -1);
-    currentTxs = filtered.filter((t) => t.monthKey === lastMonth);
-    // prevMonth mungkin tidak lolos filter tanggal user — ambil dari dataset (sudah
-    // difilter dimensi) bulan sebelumnya.
-    previousTxs = dimFiltered.filter((t) => t.monthKey === prevMonth);
-    if (previousTxs.length === 0) return empty;
-  } else {
-    // Rentang tunggal/kustom: bandingkan durasi sama sebelumnya
-    const from = filter.dateRange.from ?? bounds.min;
-    const to = filter.dateRange.to ?? bounds.max;
-    // durasi = jumlah hari inklusif
-    const days =
-      Math.round(
-        (new Date(to).getTime() - new Date(from).getTime()) / 86_400_000,
-      ) + 1;
-    const prevFrom = addDaysIso(from, -days);
-    const prevTo = addDaysIso(from, -1);
-    previousTxs = dimFiltered.filter((t) => t.date >= prevFrom && t.date <= prevTo);
-    if (previousTxs.length === 0) return empty;
-    currentTxs = filtered;
-  }
+  // Durasi hari inklusif rentang aktif, lalu geser mundur sebesar durasi yang sama.
+  const days =
+    Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000) + 1;
+  if (days <= 0) return empty;
+
+  const prevTo = addDaysIso(from, -1);
+  const prevFrom = addDaysIso(from, -days);
+
+  const currentTxs = filtered;
+  const previousTxs = dimFiltered.filter((t) => t.date >= prevFrom && t.date <= prevTo);
+  if (previousTxs.length === 0) return empty;
 
   const cur = computeKpi(currentTxs);
   const prev = computeKpi(previousTxs);

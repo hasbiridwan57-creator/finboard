@@ -13,12 +13,36 @@ import {
   getPaginationRowModel,
   flexRender,
   type ColumnDef,
+  type Row,
   type SortingState,
 } from "@tanstack/react-table";
 import { Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import type { NormalizedTransaction } from "@/lib/types";
-import { formatRupiah } from "@/lib/format";
+import { formatRupiah, parseFinancialNumber } from "@/lib/format";
 
+/**
+ * globalFilterFn kustom: cari substring di semua kolom (teks & angka).
+ * Pencarian angka toleran terhadap pemisah: input "15.000.000", "15000000",
+ * atau "15,000,000" semuanya dinormalisasi lalu dicocokkan ke nilai sel.
+ */
+function matchGlobalFilter(
+  row: Row<NormalizedTransaction>,
+  _columnId: string,
+  filterValue: unknown,
+): boolean {
+  const q = String(filterValue ?? "").trim().toLowerCase();
+  if (!q) return true;
+  const t = row.original;
+  const textHay = [t.date, t.category, t.department, t.channel].join(" ").toLowerCase();
+  if (textHay.includes(q)) return true;
+  // Normalisasi query angka → bandingkan dengan nilai numerik tiap sel keuangan.
+  const qNum = parseFinancialNumber(q);
+  if (qNum !== null) {
+    const cells = [t.revenue, t.expenses, t.profit, t.budget];
+    if (cells.some((v) => v !== null && Math.abs(v - qNum) < 1)) return true;
+  }
+  return false;
+}
 interface Props {
   data: NormalizedTransaction[];
   hasBudget: boolean;
@@ -92,7 +116,7 @@ export default function TransactionTable({ data, hasBudget }: Props) {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    globalFilterFn: "includesString",
+    globalFilterFn: matchGlobalFilter,
   });
 
   return (

@@ -19,19 +19,23 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { formatRupiah, formatPercent } from "@/lib/format";
+import { formatCurrency, formatPercent } from "@/lib/format";
 import type { MonthlyPoint, DimensionPoint } from "@/lib/chartAggregator";
+import { useFinBoardStore } from "@/store/finBoardStore";
 import ChartTooltip from "./ChartTooltip";
 
 const CHART_COLORS = ["#2563eb", "#0ea5e9", "#16a34a", "#f59e0b", "#6366f1"];
 
-/**
- * Formatter ringkas khusus Y-axis agar label tak terlipat dua baris.
- * "Rp 1,05 M" (formatRupiah penuh) terlalu panjang untuk kolom sempit,
- * jadi Y-axis buang prefiks "Rp " saja, pertahankan satuan (jt/rb/M).
- */
-function yAxisFormat(value: number): string {
-  return formatRupiah(value).replace("Rp ", "");
+/** Buat formatter Y-axis ringkas sesuai mode mata uang (buang prefiks simbol). */
+function makeYAxisFormatter(mode: "IDR" | "USD") {
+  return (value: number): string =>
+    formatCurrency(value, mode).replace(/^(Rp |\$)\s?/, "");
+}
+
+/** Hook kecil agar chart ikut mode mata uang global. */
+function useCurrency() {
+  const { currency } = useFinBoardStore();
+  return currency;
 }
 
 function EmptyChart({ msg }: { msg: string }) {
@@ -44,21 +48,37 @@ function EmptyChart({ msg }: { msg: string }) {
 
 function ChartCard({
   title,
+  note,
   children,
 }: {
   title: string;
+  note?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-xl border border-surface-border bg-white p-5 shadow-card">
       <h3 className="mb-4 text-sm font-semibold text-foreground">{title}</h3>
       {children}
+      {note != null && <div className="mt-3">{note}</div>}
     </div>
+  );
+}
+
+/** Catatan kecil: klik batang memfilter dimensi terkait (B3). */
+function FilterHint({ active }: { active: string[] }) {
+  if (active.length === 0) {
+    return <p className="text-xs text-muted-foreground">Klik batang untuk memfilter dashboard.</p>;
+  }
+  return (
+    <p className="text-xs text-muted-foreground">
+      Filter aktif: {active.join(", ")} — klik lagi untuk melepas.
+    </p>
   );
 }
 
 /** 1. Tren Revenue vs Expenses (Area) — PRD FR-CHR-1 */
 export function RevenueExpenseChart({ data }: { data: MonthlyPoint[] }) {
+  const currency = useCurrency();
   if (data.length === 0) return <ChartCard title="Tren Revenue vs Expenses"><EmptyChart msg="Tidak ada data." /></ChartCard>;
   return (
     <ChartCard title="Tren Revenue vs Expenses (Bulanan)">
@@ -76,8 +96,8 @@ export function RevenueExpenseChart({ data }: { data: MonthlyPoint[] }) {
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={yAxisFormat} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
-          <Tooltip content={<ChartTooltip />} />
+          <YAxis tickFormatter={makeYAxisFormatter(currency)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
+          <Tooltip content={<ChartTooltip valueFormatter={(v) => formatCurrency(v, currency)} />} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#2563eb" strokeWidth={2} fill="url(#revGrad)" />
           <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#dc2626" strokeWidth={2} fill="url(#expGrad)" />
@@ -89,16 +109,61 @@ export function RevenueExpenseChart({ data }: { data: MonthlyPoint[] }) {
 
 /** 2. Revenue vs Budget (kondisional) — PRD FR-CHR-2 */
 export function RevenueBudgetChart({ data }: { data: MonthlyPoint[] }) {
+  const currency = useCurrency();
   const withBudget = data.filter((d) => d.budget !== null && d.budget > 0);
   if (withBudget.length === 0) return null;
+
+  /** Tooltip khusus: revenue, budget, dan selisih % aktual-vs-anggaran (A4). */
+  const VarianceTooltip = (props: {
+    active?: boolean;
+    payload?: { value?: number; name?: string | number; color?: string; fill?: string }[];
+    label?: string | number;
+  }) => {
+    const { active: on, payload, label } = props;
+    if (!on || !payload || payload.length === 0) return null;
+    const rev = payload.find((p) => p.name === "Revenue Aktual")?.value ?? 0;
+    const bud = payload.find((p) => p.name === "Budget")?.value ?? 0;
+    const variance = bud !== 0 ? ((rev - bud) / bud) * 100 : null;
+    return (
+      <div className="rounded-lg border border-surface-border bg-white px-3 py-2 shadow-lg">
+        <p className="mb-1.5 text-xs font-semibold text-foreground">{label}</p>
+        <div className="space-y-1 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#2563eb" }} />
+            <span className="text-muted-foreground">Revenue Aktual</span>
+            <span className="ml-auto font-semibold tabular-nums text-foreground">
+              {formatCurrency(rev, currency)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#94a3b8" }} />
+            <span className="text-muted-foreground">Budget</span>
+            <span className="ml-auto font-semibold tabular-nums text-foreground">
+              {formatCurrency(bud, currency)}
+            </span>
+          </div>
+          {variance !== null && (
+            <div className="mt-1 flex items-center justify-between border-t border-surface-border pt-1">
+              <span className="text-muted-foreground">Variance</span>
+              <span className={`font-semibold tabular-nums ${variance >= 0 ? "text-success" : "text-danger"}`}>
+                {variance >= 0 ? "+" : ""}
+                {formatPercent(variance)}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <ChartCard title="Realisasi Revenue vs Budget">
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={withBudget} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={yAxisFormat} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
-          <Tooltip content={<ChartTooltip />} />
+          <YAxis tickFormatter={makeYAxisFormatter(currency)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
+          <Tooltip content={<VarianceTooltip />} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar dataKey="revenue" name="Revenue Aktual" fill="#2563eb" radius={[4, 4, 0, 0]} />
           <Line type="monotone" dataKey="budget" name="Budget" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
@@ -111,13 +176,25 @@ export function RevenueBudgetChart({ data }: { data: MonthlyPoint[] }) {
 /** 3. Profit by Category (Vertical Bar + toggle Donut jika >6) — PRD FR-CHR-3 */
 export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
   const [chartType, setChartType] = useState<"bar" | "donut">("bar");
+  const currency = useCurrency();
+  const { filter, setFilter } = useFinBoardStore();
+  const active = filter.categories;
+
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const showToggle = data.length > 6;
+
+  /** Toggle kategori aktif saat batang/kupon diklik (B3). */
+  const toggle = (name: string) => {
+    const next = active.includes(name)
+      ? active.filter((c) => c !== name)
+      : [...active, name];
+    setFilter({ categories: next });
+  };
 
   if (data.length === 0) return <ChartCard title="Profit per Kategori"><EmptyChart msg="Kolom kategori tidak tersedia." /></ChartCard>;
 
-  const showToggle = data.length > 6;
-
   return (
-    <ChartCard title="Profit per Kategori">
+    <ChartCard title="Profit per Kategori" note={<FilterHint active={active} />}>
       {showToggle && (
         <div className="mb-3 flex justify-end">
           <div className="inline-flex rounded-lg border border-surface-border bg-background p-0.5">
@@ -154,12 +231,14 @@ export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
               innerRadius="55%"
               outerRadius="80%"
               paddingAngle={2}
+              onClick={(entry: { name?: string }) => entry?.name && toggle(entry.name)}
+              style={{ cursor: "pointer" }}
             >
               {data.map((d, i) => (
-                <Cell key={i} fill={d.value >= 0 ? CHART_COLORS[i % CHART_COLORS.length] : "#dc2626"} />
+                <Cell key={i} fill={d.value >= 0 ? CHART_COLORS[i % CHART_COLORS.length] : "#dc2626"} opacity={active.length === 0 || active.includes(d.name) ? 1 : 0.35} />
               ))}
             </Pie>
-            <Tooltip content={<ChartTooltip valueFormatter={(v) => `${formatRupiah(v)} (${formatPercent((v / data.reduce((s, d) => s + d.value, 0)) * 100)})`} />} />
+            <Tooltip content={<ChartTooltip valueFormatter={(v) => `${formatCurrency(v, currency)} (${formatPercent((v / total) * 100)})`} />} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
           </PieChart>
         ) : (
@@ -175,11 +254,17 @@ export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
               textAnchor="end"
               height={50}
             />
-            <YAxis tickFormatter={yAxisFormat} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
-            <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f1f5f9" }} />
-            <Bar dataKey="value" name="Profit" radius={[4, 4, 0, 0]}>
+            <YAxis tickFormatter={makeYAxisFormatter(currency)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
+            <Tooltip content={<ChartTooltip valueFormatter={(v) => formatCurrency(v, currency)} />} cursor={{ fill: "#f1f5f9" }} />
+            <Bar
+              dataKey="value"
+              name="Profit"
+              radius={[4, 4, 0, 0]}
+              onClick={(entry: { name?: string }) => entry?.name && toggle(entry.name)}
+              style={{ cursor: "pointer" }}
+            >
               {data.map((d, i) => (
-                <Cell key={i} fill={d.value >= 0 ? "#2563eb" : "#dc2626"} />
+                <Cell key={i} fill={d.value >= 0 ? "#2563eb" : "#dc2626"} opacity={active.length === 0 || active.includes(d.name) ? 1 : 0.35} />
               ))}
             </Bar>
           </BarChart>
@@ -189,20 +274,38 @@ export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
   );
 }
 
-/** 4. Profit by Department (Horizontal Bar) — PRD FR-CHR-4 */
+/** 4. Profit by Department (Horizontal Bar) — PRD FR-CHR-4 + klik filter (B3) */
 export function DepartmentProfitChart({ data }: { data: DimensionPoint[] }) {
+  const currency = useCurrency();
+  const { filter, setFilter } = useFinBoardStore();
+  const active = filter.departments;
+
+  const toggle = (name: string) => {
+    const next = active.includes(name)
+      ? active.filter((c) => c !== name)
+      : [...active, name];
+    setFilter({ departments: next });
+  };
+
   if (data.length === 0) return <ChartCard title="Profit per Departemen"><EmptyChart msg="Kolom departemen tidak tersedia." /></ChartCard>;
   return (
-    <ChartCard title="Profit per Departemen">
+    <ChartCard title="Profit per Departemen" note={<FilterHint active={active} />}>
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={data} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-          <XAxis type="number" tickFormatter={yAxisFormat} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
+          <XAxis type="number" tickFormatter={makeYAxisFormatter(currency)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
           <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={170} />
-          <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f1f5f9" }} />
-          <Bar dataKey="value" name="Profit" radius={[0, 4, 4, 0]} barSize={20}>
+          <Tooltip content={<ChartTooltip valueFormatter={(v) => formatCurrency(v, currency)} />} cursor={{ fill: "#f1f5f9" }} />
+          <Bar
+            dataKey="value"
+            name="Profit"
+            radius={[0, 4, 4, 0]}
+            barSize={20}
+            onClick={(entry: { name?: string }) => entry?.name && toggle(entry.name)}
+            style={{ cursor: "pointer" }}
+          >
             {data.map((d, i) => (
-              <Cell key={i} fill={d.value >= 0 ? "#16a34a" : "#dc2626"} />
+              <Cell key={i} fill={d.value >= 0 ? "#16a34a" : "#dc2626"} opacity={active.length === 0 || active.includes(d.name) ? 1 : 0.35} />
             ))}
           </Bar>
         </BarChart>
@@ -211,8 +314,10 @@ export function DepartmentProfitChart({ data }: { data: DimensionPoint[] }) {
   );
 }
 
-/** 5. Profit by Channel (Donut) — PRD FR-CHR-5 */
+/** 5. Profit by Channel (Donut) — PRD FR-CHR-5 + catatan kanal rugi (A4) */
 export function ChannelProfitChart({ data }: { data: DimensionPoint[] }) {
+  const currency = useCurrency();
+  const negative = data.filter((d) => d.value <= 0);
   const positive = data.filter((d) => d.value > 0);
   if (positive.length === 0)
     return <ChartCard title="Profit per Kanal Penjualan"><EmptyChart msg="Kolom kanal tidak tersedia atau tidak ada profit." /></ChartCard>;
@@ -233,9 +338,9 @@ export function ChannelProfitChart({ data }: { data: DimensionPoint[] }) {
               <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip content={<ChartTooltip valueFormatter={(v) => `${formatRupiah(v)} (${formatPercent((v / total) * 100)})`} />} />
+          <Tooltip content={<ChartTooltip valueFormatter={(v) => `${formatCurrency(v, currency)} (${formatPercent((v / total) * 100)})`} />} />
           <text x="50%" y="48%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground" fontSize={14} fontWeight={700}>
-            {formatRupiah(total)}
+            {formatCurrency(total, currency)}
           </text>
           <text x="50%" y="56%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground" fontSize={11}>
             Total Profit
@@ -243,6 +348,11 @@ export function ChannelProfitChart({ data }: { data: DimensionPoint[] }) {
           <Legend wrapperStyle={{ fontSize: 12 }} />
         </PieChart>
       </ResponsiveContainer>
+      {negative.length > 0 && (
+        <p className="mt-2 rounded-lg border border-danger-border bg-danger-soft px-3 py-2 text-xs text-danger">
+          Catatan: {negative.length} kanal dengan profit ≤ 0 tidak ditampilkan pada donut ({negative.map((d) => d.name).join(", ")}).
+        </p>
+      )}
     </ChartCard>
   );
 }

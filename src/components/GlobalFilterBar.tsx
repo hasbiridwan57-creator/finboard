@@ -221,11 +221,11 @@ export default function GlobalFilterBar() {
     filter.dateRange.to !== null;
 
   return (
-    <div className="sticky top-16 z-30 border-b border-surface-border bg-background/95 backdrop-blur">
+    <div className="sticky top-[57px] z-30 border-b border-surface-border bg-background/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
         <DateRangeControl min={min} max={max} />
-        {categories.length > 0 && (
+        {categories.length > 1 && (
           <MultiSelect
             label="Kategori"
             values={categories}
