@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface Props {
@@ -10,7 +9,7 @@ interface Props {
   /** arah "baik": untuk Revenue/Profit naik=baik; untuk Expenses turun=baik (PRD FR-KPI) */
   goodWhenUp: boolean;
   tooltip?: string;
-  /** index urutan kartu untuk stagger animation */
+  /** index urutan kartu untuk stagger animation (CSS) */
   index?: number;
 }
 
@@ -31,11 +30,9 @@ export default function KpiCard({ label, value, delta, goodWhenUp, tooltip, inde
   const neutral = delta === null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: index * 0.08, ease: "easeOut" }}
-      className="rounded-xl border border-surface-border bg-white p-5 shadow-card"
+    <div
+      className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both rounded-xl border border-surface-border bg-white p-5 shadow-card"
+      style={{ animationDelay: `${index * 80}ms` }}
       title={tooltip}
     >
       <p className="text-sm font-medium text-muted-foreground">{label}</p>
@@ -60,6 +57,6 @@ export default function KpiCard({ label, value, delta, goodWhenUp, tooltip, inde
           </span>
         )}
       </p>
-    </motion.div>
+    </div>
   );
 }

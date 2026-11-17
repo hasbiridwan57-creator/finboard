@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: LayoutProps<"/">) {
+}: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="id" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">

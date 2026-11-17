@@ -3,13 +3,16 @@
 /**
  * DashboardSkeleton — skeleton loader sesuai PRD §8.3 butir 2.
  * Muncul saat parsing CSV besar (>150ms) sebelum dashboard tampil penuh.
+ * Dibangun di atas komponen Skeleton shadcn/ui.
  */
+import { Skeleton } from "@/components/ui/skeleton";
+
 export function KpiCardSkeleton() {
   return (
-    <div className="rounded-xl border border-surface-border bg-white p-5 shadow-card animate-pulse">
-      <div className="h-3 w-24 bg-surface-border rounded animate-pulse" />
-      <div className="mt-4 h-7 w-32 bg-surface-border rounded animate-pulse" />
-      <div className="mt-3 h-3 w-20 bg-surface-border rounded animate-pulse" />
+    <div className="rounded-xl border border-surface-border bg-white p-5 shadow-card">
+      <Skeleton className="h-3 w-24" />
+      <Skeleton className="mt-4 h-7 w-32" />
+      <Skeleton className="mt-3 h-3 w-20" />
     </div>
   );
 }
@@ -17,13 +20,13 @@ export function KpiCardSkeleton() {
 export function ChartSkeleton() {
   return (
     <div className="rounded-xl border border-surface-border bg-white p-5 shadow-card">
-      <div className="mb-4 h-3 w-40 bg-surface-border rounded animate-pulse" />
+      <Skeleton className="mb-4 h-3 w-40" />
       <div className="h-[280px] flex items-end gap-2">
         {Array.from({ length: 12 }).map((_, i) => (
-          <div
+          <Skeleton
             key={i}
-            className="flex-1 bg-surface-border rounded-t animate-pulse"
-            style={{ height: `${30 + Math.sin(i * 0.5) * 40 + Math.random() * 20}%` }}
+            className="flex-1 rounded-t"
+            style={{ height: `${30 + Math.sin(i * 0.5) * 40}%` }}
           />
         ))}
       </div>
