@@ -3,7 +3,7 @@
  * 3–5 poin, sinkron dengan data terfilter.
  */
 import type { NormalizedTransaction } from "@/lib/types";
-import { aggregateByDimension, aggregateMonthly } from "./chartAggregator";
+import { aggregateMonthly } from "./chartAggregator";
 import { computeKpi } from "./kpiCalculator";
 import { formatRupiah, formatPercent } from "./format";
 
@@ -63,16 +63,24 @@ export function generateInsights(txs: NormalizedTransaction[]): Insight[] {
     });
   }
 
-  // 4. Anomali rugi (profit negatif per segmen kategori)
-  const lossSegments = Array.from(byCategoryRev.entries())
-    .map(([name, rev]) => ({ name, profit: txs.filter((t) => t.category === name).reduce((s, t) => s + t.profit, 0) }))
+  // 4. Anomali rugi (profit negatif) — periksa level Departemen DAN Kategori (PRD FR-INS).
+  // Menggabungkan kedua dimensi agar defisit di segmen mana pun terdeteksi.
+  const profitBy = (key: "category" | "department") => {
+    const m = new Map<string, number>();
+    for (const t of txs) m.set(t[key], (m.get(t[key]) ?? 0) + t.profit);
+    return m;
+  };
+  const lossSegments = [
+    ...Array.from(profitBy("category").entries()).map(([name, profit]) => ({ name, profit, dim: "Kategori" })),
+    ...Array.from(profitBy("department").entries()).map(([name, profit]) => ({ name, profit, dim: "Departemen" })),
+  ]
     .filter((s) => s.profit < 0)
     .sort((a, b) => a.profit - b.profit);
   if (lossSegments.length > 0) {
     const worst = lossSegments[0];
     insights.push({
       tone: "warning",
-      text: `Perhatian: Segmen **${worst.name}** mengalami defisit laba sebesar **${formatRupiah(worst.profit)}** pada periode terpilih.`,
+      text: `Perhatian: ${worst.dim} **${worst.name}** mengalami defisit laba sebesar **${formatRupiah(worst.profit)}** pada periode terpilih.`,
     });
   }
 

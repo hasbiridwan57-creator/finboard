@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { UploadCloud, FileWarning, Loader2 } from "lucide-react";
 import { parseCsv, validateFile } from "@/lib/csvParser";
 import { isMappingSufficient } from "@/lib/columnMapper";
+import type { ParsedDataset } from "@/lib/types";
 import { setRawCsv } from "@/lib/sessionCsv";
 import { useFinBoardStore } from "@/store/finBoardStore";
 
@@ -43,15 +44,31 @@ export default function CsvDropzone({ onParsed, onParsingStart, onParsingError }
       onParsingStart?.();
       try {
         const text = await file.text();
-        const ds = parseCsv(text, file.name);
         setRawCsv(text, file.name);
-        setDataset(ds);
-        if (!isMappingSufficient(ds.mapping)) {
-          setNeedsManualMapping(true);
+        // allowPartial: jika heuristik gagal mendeteksi kolom wajib (termasuk kolom
+        // tanggal), JANGAN throw — simpan dataset kerangka & buka modal mapping manual
+        // (PRD FR-PRS-06). Modal akan menuntun user memilih kolom yang benar.
+        let ds: ParsedDataset;
+        let needsMapping = false;
+        try {
+          ds = parseCsv(text, file.name);
+          needsMapping = !isMappingSufficient(ds.mapping);
+        } catch {
+          // Heuristik gagal total (kolom wajib null / 0 baris valid) → kerangka kosong.
+          ds = parseCsv(text, file.name, { allowPartial: true });
+          needsMapping = true;
         }
-        toast.success("CSV berhasil diproses", {
-          description: `${ds.transactions.length} baris transaksi siap dianalisis.`,
-        });
+        setDataset(ds);
+        if (needsMapping) {
+          setNeedsManualMapping(true);
+          toast.info("Beberapa kolom perlu dipetakan manual", {
+            description: "Silakan sesuaikan pemetaan kolom di dashboard.",
+          });
+        } else {
+          toast.success("CSV berhasil diproses", {
+            description: `${ds.transactions.length} baris transaksi siap dianalisis.`,
+          });
+        }
         onParsed();
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Gagal memproses file CSV.";

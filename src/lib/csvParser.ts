@@ -22,6 +22,11 @@ export function validateFile(file: File): void {
 export interface ParseOptions {
   /** mapping kolom eksplisit (jika user mengatur manual). Jika tidak, pakai autoMap. */
   mapping?: ColumnMapping;
+  /**
+   * Jika true: JANGAN throw saat kolom wajib belum terpenuhi / hasil 0 baris valid.
+   * Kembalikan dataset kerangka agar ManualMappingModal bisa memperbaikinya (PRD FR-PRS-06).
+   */
+  allowPartial?: boolean;
 }
 
 /**
@@ -64,11 +69,9 @@ export function parseCsv(
       return; // baris tanggal invalid diabaikan dari agregasi (PRD FR-PRS-04)
     }
 
-    // Angka (onCleaned dipanggil hanya sekali per baris untuk menghitung sel dibersihkan)
-    let cleanedInRow = false;
+    // Angka (onCleaned dipanggil untuk menghitung total sel dibersihkan)
     const markClean = () => {
       cleanedNumericCells++;
-      cleanedInRow = true;
     };
 
     let rev = toNumberOrZero(revenue ? row[revenue] : "0", markClean);
@@ -109,6 +112,18 @@ export function parseCsv(
   });
 
   if (transactions.length === 0) {
+    // Dengan allowPartial: kembalikan dataset kerangka (0 transaksi) agar
+    // ManualMappingModal dapat memperbaiki pemetaan (PRD FR-PRS-06), JANGAN throw.
+    if (options.allowPartial) {
+      return {
+        fileName,
+        headers,
+        transactions: [],
+        mapping,
+        invalidDateRows,
+        cleanedNumericCells,
+      };
+    }
     throw new Error("Tidak ada baris data valid yang dapat dibaca. Periksa format tanggal dan kolom CSV Anda.");
   }
 

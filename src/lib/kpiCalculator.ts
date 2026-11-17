@@ -94,13 +94,24 @@ export function computeDeltas(
   let currentTxs: NormalizedTransaction[];
   let previousTxs: NormalizedTransaction[];
 
+  // Periode sebelumnya diambil dari fullDataset, TAPI tetap harus menghormati filter
+  // dimensi aktif (kategori/departemen/kanal) — hanya sumbu TANGGAL yang digeser ke
+  // periode sebelumnya (PRD FR-KPI-01: perbandingan apples-to-apples pada segmen sama).
+  const dimFiltered = fullDataset.filter(
+    (t) =>
+      (filter.categories.length === 0 || filter.categories.includes(t.category)) &&
+      (filter.departments.length === 0 || filter.departments.includes(t.department)) &&
+      (filter.channels.length === 0 || filter.channels.includes(t.channel)),
+  );
+
   if (months.length >= 2) {
     // MoM: bulan penuh terakhir vs bulan sebelumnya
     const lastMonth = months[months.length - 1];
     const prevMonth = monthAdd(lastMonth, -1);
     currentTxs = filtered.filter((t) => t.monthKey === lastMonth);
-    // prevMonth mungkin tidak lolos filter user — ambil dari fullDataset
-    previousTxs = fullDataset.filter((t) => t.monthKey === prevMonth);
+    // prevMonth mungkin tidak lolos filter tanggal user — ambil dari dataset (sudah
+    // difilter dimensi) bulan sebelumnya.
+    previousTxs = dimFiltered.filter((t) => t.monthKey === prevMonth);
     if (previousTxs.length === 0) return empty;
   } else {
     // Rentang tunggal/kustom: bandingkan durasi sama sebelumnya
@@ -113,7 +124,7 @@ export function computeDeltas(
       ) + 1;
     const prevFrom = addDaysIso(from, -days);
     const prevTo = addDaysIso(from, -1);
-    previousTxs = fullDataset.filter((t) => t.date >= prevFrom && t.date <= prevTo);
+    previousTxs = dimFiltered.filter((t) => t.date >= prevFrom && t.date <= prevTo);
     if (previousTxs.length === 0) return empty;
     currentTxs = filtered;
   }

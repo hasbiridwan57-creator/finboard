@@ -4,7 +4,7 @@
  * Halaman Dashboard — merangkai seluruh modul (F2–F5).
  * Single source of truth: useFinBoardStore. Filter global → semua ikut berubah.
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Inbox } from "lucide-react";
 import { useFinBoardStore } from "@/store/finBoardStore";
@@ -28,8 +28,7 @@ import ManualMappingModal from "@/components/ManualMappingModal";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { dataset, filter, needsManualMapping, setNeedsManualMapping } = useFinBoardStore();
-  const [mappingOpen, setMappingOpen] = useState(false);
+  const { dataset } = useFinBoardStore();
 
   // Belum ada data → kembali ke upload
   if (!dataset) {
@@ -57,14 +56,17 @@ function DashboardContent() {
   const allTxs = ds.transactions;
 
   const filtered = useFiltered(allTxs, filter);
-  const kpi = computeKpi(filtered);
-  const deltas = computeDeltas(filtered, filter, allTxs);
-  const monthly = aggregateMonthly(filtered);
-  const budgetAvailable = hasBudget(filtered);
-  const categoryData = aggregateByDimension(filtered, "category");
-  const deptData = aggregateByDimension(filtered, "department");
-  const channelData = aggregateByDimension(filtered, "channel");
-  const insights = generateInsights(filtered);
+
+  // Semua derivasi berat dibungkus useMemo agar hanya dihitung ulang saat
+  // data/filter benar-benar berubah (PRD §9 performa re-render <250ms).
+  const kpi = useMemo(() => computeKpi(filtered), [filtered]);
+  const deltas = useMemo(() => computeDeltas(filtered, filter, allTxs), [filtered, filter, allTxs]);
+  const monthly = useMemo(() => aggregateMonthly(filtered), [filtered]);
+  const budgetAvailable = useMemo(() => hasBudget(filtered), [filtered]);
+  const categoryData = useMemo(() => aggregateByDimension(filtered, "category"), [filtered]);
+  const deptData = useMemo(() => aggregateByDimension(filtered, "department"), [filtered]);
+  const channelData = useMemo(() => aggregateByDimension(filtered, "channel"), [filtered]);
+  const insights = useMemo(() => generateInsights(filtered), [filtered]);
 
   return (
     <>
@@ -107,8 +109,10 @@ function DashboardContent() {
           />
         </div>
 
-        {/* Charts Row 1: Tren bulanan + Budget kondisional (PRD §8.2) */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        {/* Charts Row 1: Tren bulanan + Budget kondisional (PRD §8.2).
+            Grid dinamis: jika kolom Budget tak tersedia, chart tren memenuhi
+            lebar penuh (tanpa ruang kosong). */}
+        <div className={`grid gap-6 ${budgetAvailable ? "lg:grid-cols-2" : "grid-cols-1"}`}>
           <RevenueExpenseChart data={monthly} />
           {budgetAvailable && <RevenueBudgetChart data={monthly} />}
         </div>

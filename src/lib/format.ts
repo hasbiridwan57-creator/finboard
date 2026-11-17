@@ -70,9 +70,9 @@ export function parseFinancialNumber(raw: string | number | null | undefined): n
       // Banyak titik = ribuan (ID): 1.500.000
       integerPart = s.replace(/\./g, "");
     } else {
-      // Satu titik: 250.000 (ribuan) vs 1.50 (desimal)
+      // Satu titik: 250.000 (ribuan) vs 1.50 (desimal) vs 0.500 (desimal, int "0")
       const [int, dec] = s.split(".");
-      if (dec.length === 3) {
+      if (dec.length === 3 && int !== "0") {
         integerPart = int + dec; // ribuan
       } else {
         integerPart = int; // desimal
@@ -85,9 +85,9 @@ export function parseFinancialNumber(raw: string | number | null | undefined): n
       // Banyak koma = ribuan (US): 1,250,000
       integerPart = s.replace(/,/g, "");
     } else {
-      // Satu koma: 1,500 (ribuan US) vs 1,5 (desimal ID)
+      // Satu koma: 1,500 (ribuan US) vs 1,5 (desimal ID) vs 0,500 (desimal, int "0")
       const [int, dec] = s.split(",");
-      if (dec.length === 3) {
+      if (dec.length === 3 && int !== "0") {
         integerPart = int + dec; // ribuan
       } else {
         integerPart = int; // desimal
@@ -159,15 +159,6 @@ function trimNum(n: number): string {
 /** Format persentase Indonesia, 1 desimal: "24,8%". */
 export function formatPercent(value: number, decimals = 1): string {
   return `${new Intl.NumberFormat("id-ID", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(value)}%`;
-}
-
-/** Format delta dengan tanda: "+12,4%" / "-3,1%". */
-export function formatDelta(value: number, decimals = 1): string {
-  const sign = value > 0 ? "+" : value < 0 ? "" : ""; // minus sudah dari angka
-  return `${sign}${new Intl.NumberFormat("id-ID", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(value)}%`;

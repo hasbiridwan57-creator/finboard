@@ -18,7 +18,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  Label,
 } from "recharts";
 import { formatRupiah, formatPercent } from "@/lib/format";
 import type { MonthlyPoint, DimensionPoint } from "@/lib/chartAggregator";

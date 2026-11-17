@@ -48,12 +48,18 @@ export default function ManualMappingModal({ open, headers, initialMapping, onCl
   const [mapping, setMapping] = useState<ColumnMapping>(initialMapping);
   const { setDataset } = useFinBoardStore();
 
-  // 3 baris pertama untuk pratinjau (PRD US-03)
+  // 3 baris pertama untuk pratinjau (PRD US-03).
+  // Dependency [mapping]: pratinjau ikut ter-update saat user mengubah pilihan dropdown.
+  // reparseWithMapping dibungkus try-catch agar tidak crash ketika kombinasi pemetaan
+  // sementara belum valid (mis. kolom tanggal masih kosong).
   const preview = useMemo(() => {
-    const raw = reparseWithMapping(mapping);
-    return raw ? raw.transactions.slice(0, 3) : [];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headers]);
+    try {
+      const raw = reparseWithMapping(mapping);
+      return raw ? raw.transactions.slice(0, 3) : [];
+    } catch {
+      return [];
+    }
+  }, [mapping]);
 
   const sufficient = isMappingSufficient(mapping);
 

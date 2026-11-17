@@ -6,7 +6,7 @@
  * Dibangun di atas komponen shadcn/ui: Popover, Command, Checkbox, Button.
  * Perubahan apa pun → store → seluruh komponen ikut berubah.
  */
-import { useState } from "react";
+import { useMemo } from "react";
 import { CalendarIcon, Check, ChevronDown, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useFinBoardStore } from "@/store/finBoardStore";
 import { uniqueValues } from "@/lib/chartAggregator";
@@ -197,16 +197,21 @@ function MultiSelect({
 
 export default function GlobalFilterBar() {
   const { dataset, filter, setFilter, resetFilter } = useFinBoardStore();
+  const txs = dataset?.transactions;
+
+  // uniqueValues + batas tanggal dibungkus useMemo agar tak dihitung ulang tiap render
+  // (PRD §9: hindari kerja berat di jalur render).
+  const categories = useMemo(() => (txs ? uniqueValues(txs, "category") : []), [txs]);
+  const departments = useMemo(() => (txs ? uniqueValues(txs, "department") : []), [txs]);
+  const channels = useMemo(() => (txs ? uniqueValues(txs, "channel") : []), [txs]);
+
+  const { min, max } = useMemo(() => {
+    if (!txs || txs.length === 0) return { min: "", max: "" };
+    const dates = txs.map((t) => t.date).sort();
+    return { min: dates[0], max: dates[dates.length - 1] };
+  }, [txs]);
+
   if (!dataset) return null;
-
-  const txs = dataset.transactions;
-  const categories = uniqueValues(txs, "category");
-  const departments = uniqueValues(txs, "department");
-  const channels = uniqueValues(txs, "channel");
-
-  const dates = txs.map((t) => t.date).sort();
-  const min = dates[0];
-  const max = dates[dates.length - 1];
 
   const isFiltered =
     filter.categories.length > 0 ||

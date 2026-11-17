@@ -4,13 +4,12 @@
  * Halaman Upload / Empty State (PRD US-01, US-02, §8.3).
  * Skeleton muncul saat parsing file besar (>150ms) sesuai PRD §8.3 butir 2.
  *
- * Dashboard & modal di-lazy-load (dynamic import) agar landing page tidak
+ * Dashboard di-lazy-load otomatis via route-level split Next.js App Router
+ * (masing-masing halaman = chunk terpisah), sehingga landing page tidak
  * mentrucking bundle Recharts — menekan TBT demi skor Lighthouse §12.
  */
 import { useState } from "react";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { BarChart3, Sparkles } from "lucide-react";
 import CsvDropzone from "@/components/CsvDropzone";
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
@@ -20,17 +19,11 @@ import { setRawCsv } from "@/lib/sessionCsv";
 import { generateDemoCsv } from "@/lib/demoDataset";
 import { parseCsv } from "@/lib/csvParser";
 
-// Lazy-load komponen berat: hanya dimuat saat benar-benar dibutuhkan.
-const ManualMappingModal = dynamic(
-  () => import("@/components/ManualMappingModal").then((m) => m.default),
-  { ssr: false }
-);
-
 const SKELETON_MIN_MS = 150;
 
 export default function UploadView() {
   const router = useRouter();
-  const { dataset, needsManualMapping, setDataset } = useFinBoardStore();
+  const { setDataset } = useFinBoardStore();
   const [showSkeleton, setShowSkeleton] = useState(false);
 
   const loadDemo = async () => {
@@ -100,21 +93,9 @@ export default function UploadView() {
         </Button>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Data Anda tidak pernah dikirim ke server mana pun.{" "}
-          <Link href="/dashboard" className="text-primary underline underline-offset-2 hover:text-primary-hover">
-            Pelajari cara kerjanya
-          </Link>
+          Data Anda tidak pernah dikirim ke server mana pun — seluruh pemrosesan terjadi di browser.
         </p>
       </div>
-
-      {needsManualMapping && dataset && (
-        <ManualMappingModal
-          open
-          headers={dataset.headers}
-          initialMapping={dataset.mapping}
-          onClose={() => useFinBoardStore.getState().setNeedsManualMapping(false)}
-        />
-      )}
     </div>
   );
 }
