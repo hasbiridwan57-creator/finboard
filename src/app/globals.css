@@ -1,26 +1,74 @@
 @import "tailwindcss";
 
+/*
+  FinBoard – Light Clean Bright
+  Terinspirasi estetika Stripe / Linear / Vercel Dashboard.
+  Token warna mengikuti PRD §8.1.
+*/
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surface */
+  --background: #f8fafc;      /* Slate 50  – canvas */
+  --surface: #ffffff;         /* Card */
+  --surface-border: #e2e8f0;  /* Slate 200 */
+
+  /* Text */
+  --foreground: #0f172a;      /* Slate 900 – teks utama */
+  --muted-foreground: #64748b;/* Slate 500 – teks sekunder */
+
+  /* Brand */
+  --primary: #2563eb;         /* Blue 600 */
+  --primary-hover: #1d4ed8;   /* Blue 700 */
+
+  /* Status */
+  --success: #16a34a;         /* Green 600 */
+  --success-soft: #f0fdf4;    /* Green 50 */
+  --danger: #dc2626;          /* Red 600 */
+  --danger-soft: #fef2f2;     /* Red 50 */
+  --danger-border: #fecaca;   /* Red 200 */
+
+  /* Chart palette */
+  --chart-1: #2563eb;         /* Primary Blue */
+  --chart-2: #0ea5e9;         /* Sky */
+  --chart-3: #16a34a;         /* Emerald */
+  --chart-4: #f59e0b;         /* Amber */
+  --chart-5: #6366f1;         /* Indigo */
+  --chart-muted: #94a3b8;     /* Slate 400 – budget / garis netral */
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-border: var(--surface-border);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-border: var(--danger-border);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-muted: var(--chart-muted);
+
+  --font-sans: var(--font-inter);
+
+  /* Radius: rounded-xl = 12px (default), rounded-lg = 8px (default) */
+  --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.04), 0 1px 2px -1px rgb(15 23 42 / 0.04);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Seluruh angka KPI / chart / tabel memakai digit sejajar (PRD §8.1) */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
 }
