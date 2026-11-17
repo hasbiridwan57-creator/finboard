@@ -80,6 +80,7 @@ function DashboardContent() {
             delta={deltas.revenue}
             goodWhenUp
             tooltip={formatRupiah(kpi.totalRevenue, false)}
+            index={0}
           />
           <KpiCard
             label="Total Expenses"
@@ -87,6 +88,7 @@ function DashboardContent() {
             delta={deltas.expenses}
             goodWhenUp={false}
             tooltip={formatRupiah(kpi.totalExpenses, false)}
+            index={1}
           />
           <KpiCard
             label="Total Profit"
@@ -94,12 +96,14 @@ function DashboardContent() {
             delta={deltas.profit}
             goodWhenUp
             tooltip={formatRupiah(kpi.totalProfit, false)}
+            index={2}
           />
           <KpiCard
             label="Profit Margin"
             value={formatPercent(kpi.profitMargin)}
             delta={deltas.margin}
             goodWhenUp
+            index={3}
           />
         </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface Props {
@@ -9,9 +10,11 @@ interface Props {
   /** arah "baik": untuk Revenue/Profit naik=baik; untuk Expenses turun=baik (PRD FR-KPI) */
   goodWhenUp: boolean;
   tooltip?: string;
+  /** index urutan kartu untuk stagger animation */
+  index?: number;
 }
 
-export default function KpiCard({ label, value, delta, goodWhenUp, tooltip }: Props) {
+export default function KpiCard({ label, value, delta, goodWhenUp, tooltip, index = 0 }: Props) {
   // Warna delta mengikuti "apakah perubahan ini baik", bukan sekadar naik/turun
   let deltaClass = "text-muted-foreground";
   let Icon = Minus;
@@ -28,7 +31,10 @@ export default function KpiCard({ label, value, delta, goodWhenUp, tooltip }: Pr
   const neutral = delta === null;
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: index * 0.08, ease: "easeOut" }}
       className="rounded-xl border border-surface-border bg-white p-5 shadow-card"
       title={tooltip}
     >
@@ -54,6 +60,6 @@ export default function KpiCard({ label, value, delta, goodWhenUp, tooltip }: Pr
           </span>
         )}
       </p>
-    </div>
+    </motion.div>
   );
 }

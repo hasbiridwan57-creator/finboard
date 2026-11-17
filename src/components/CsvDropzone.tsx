@@ -5,6 +5,7 @@
  * Drag & drop / klik, validasi ukuran & ekstensi, lalu parse via pipeline.
  */
 import { useCallback, useRef, useState } from "react";
+import { toast } from "sonner";
 import { UploadCloud, FileWarning, Loader2 } from "lucide-react";
 import { parseCsv, validateFile, MAX_FILE_SIZE } from "@/lib/csvParser";
 import { isMappingSufficient } from "@/lib/columnMapper";
@@ -28,7 +29,9 @@ export default function CsvDropzone({ onParsed }: Props) {
       try {
         validateFile(file);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "File tidak valid.");
+        const msg = e instanceof Error ? e.message : "File tidak valid.";
+        setError(msg);
+        toast.error("File tidak valid", { description: msg });
         return;
       }
       setLoading(true);
@@ -40,9 +43,13 @@ export default function CsvDropzone({ onParsed }: Props) {
         if (!isMappingSufficient(ds.mapping)) {
           setNeedsManualMapping(true);
         }
+        toast.success("CSV berhasil diproses", {
+          description: `${ds.transactions.length} baris transaksi siap dianalisis.`,
+        });
         onParsed();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Gagal memproses file CSV.");
+        const msg = e instanceof Error ? e.message : "Gagal memproses file CSV.";
+        toast.error("Gagal memproses CSV", { description: msg });
       } finally {
         setLoading(false);
       }
