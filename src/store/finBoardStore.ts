@@ -6,11 +6,16 @@
 import { create } from "zustand";
 import type { ColumnMapping, GlobalFilterState, ParsedDataset } from "@/lib/types";
 
+/** Mode tampilan mata uang (PRD/audit Bagian B4). */
+export type CurrencyMode = "IDR" | "USD";
+
 interface FinBoardState {
   dataset: ParsedDataset | null;
   filter: GlobalFilterState;
   /** flag agar komponen tahu kapan perlu membuka modal mapping manual */
   needsManualMapping: boolean;
+  /** mode tampilan mata uang untuk format angka (default IDR) */
+  currency: CurrencyMode;
 
   setDataset: (ds: ParsedDataset) => void;
   setMapping: (mapping: ColumnMapping) => void;
@@ -19,6 +24,7 @@ interface FinBoardState {
   resetFilter: () => void;
   clearSession: () => void;
   setNeedsManualMapping: (v: boolean) => void;
+  setCurrency: (c: CurrencyMode) => void;
 }
 
 export const emptyFilter: GlobalFilterState = {
@@ -32,6 +38,7 @@ export const useFinBoardStore = create<FinBoardState>((set) => ({
   dataset: null,
   filter: emptyFilter,
   needsManualMapping: false,
+  currency: "IDR",
 
   setDataset: (ds) => {
     set({ dataset: ds, filter: emptyFilter, needsManualMapping: false });
@@ -57,6 +64,8 @@ export const useFinBoardStore = create<FinBoardState>((set) => ({
   },
 
   setNeedsManualMapping: (v) => set({ needsManualMapping: v }),
+
+  setCurrency: (c) => set({ currency: c }),
 }));
 
 /** Simpan hanya metadata ringan (PRD §13). */

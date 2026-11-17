@@ -163,3 +163,34 @@ export function formatPercent(value: number, decimals = 1): string {
     maximumFractionDigits: decimals,
   }).format(value)}%`;
 }
+
+/**
+ * Format mata uang generik sesuai mode (PRD/audit Bagian B4).
+ * - IDR: gunakan formatRupiah di atas (compact / penuh).
+ * - USD: "$1.2 M" (compact) / "$1,234,567" (penuh), pemisah gaya US.
+ *
+ * CATATAN: ini HANYA mengubah TAMPILAN format angka, bukan konversi kurs.
+ * Data tetap disimpan dalam satuan asli CSV.
+ */
+export function formatCurrency(
+  value: number,
+  mode: "IDR" | "USD",
+  compact = true,
+): string {
+  if (mode === "IDR") return formatRupiah(value, compact);
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  const usd = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+  if (compact) {
+    if (abs >= 1_000_000_000) return `${sign}$${trimNumUsd(abs / 1_000_000_000)}B`;
+    if (abs >= 1_000_000) return `${sign}$${trimNumUsd(abs / 1_000_000)}M`;
+    if (abs >= 1_000) return `${sign}$${trimNumUsd(abs / 1_000)}K`;
+  }
+  return `${sign}$${usd.format(abs)}`;
+}
+
+/** trimNum gaya US (desimal titik), maks 2 signifikan. */
+function trimNumUsd(n: number): string {
+  const rounded = Math.round(n * 100) / 100;
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(rounded);
+}

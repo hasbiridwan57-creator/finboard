@@ -59,23 +59,48 @@ function pickWeighted<K extends string>(keys: K[], weights: Record<string, numbe
   return keys[keys.length - 1];
 }
 
-export function generateDemoDataset(): NormalizedTransaction[] {
-  const rand = seededRandom(20260117);
+export function generateDemoDataset(scenarioId: DemoScenarioId = "saas"): NormalizedTransaction[] {
+  const isRetail = scenarioId === "retail";
+  // Seed & config berbeda per skenario agar pola data berbeda namun tetap deterministik.
+  const rand = seededRandom(isRetail ? 20260214 : 20260117);
   const transactions: NormalizedTransaction[] = [];
   const year = 2026;
   let id = 0;
 
+  // Skenario Retail: kategori menu F&B, departemen operasional outlet, kanal jual.
+  const categories = isRetail
+    ? ["Kopi & Minuman", "Makanan Ringan", "Merchandise", "Katering"]
+    : CATEGORIES;
+  const departments = isRetail
+    ? ["Operasional Outlet", "Pemasaran", "Riset & Pengembangan", "Layanan Pelanggan"]
+    : DEPARTMENTS;
+  const channels = isRetail
+    ? ["Gerai Fisik", "Marketplace", "Pesanan Online"]
+    : CHANNELS;
+  const categoryWeights = isRetail
+    ? { "Kopi & Minuman": 0.5, "Makanan Ringan": 0.25, Merchandise: 0.15, Katering: 0.1 }
+    : CATEGORY_WEIGHT;
+  const categoryMargins = isRetail
+    ? { "Kopi & Minuman": 0.55, "Makanan Ringan": 0.4, Merchandise: 0.5, Katering: 0.3 }
+    : CATEGORY_MARGIN;
+  const departmentMargins = isRetail
+    ? { "Operasional Outlet": 0.32, Pemasaran: 0.2, "Riset & Pengembangan": 0.15, "Layanan Pelanggan": 0.05 }
+    : DEPARTMENT_MARGIN;
+  const channelWeights = isRetail
+    ? { "Gerai Fisik": 0.55, Marketplace: 0.3, "Pesanan Online": 0.15 }
+    : CHANNEL_WEIGHT;
+
   for (let month = 1; month <= 12; month++) {
     // Transaksi per bulan: 30 baris
     for (let d = 0; d < 30; d++) {
-      const category = pickWeighted(CATEGORIES, CATEGORY_WEIGHT, rand());
-      const department = pickWeighted(DEPARTMENTS, { ...DEPARTMENT_MARGIN }, rand());
-      const channel = pickWeighted(CHANNELS, CHANNEL_WEIGHT, rand());
+      const category = pickWeighted(categories, categoryWeights, rand());
+      const department = pickWeighted(departments, { ...departmentMargins }, rand());
+      const channel = pickWeighted(channels, channelWeights, rand());
 
       // Base revenue tumbuh sepanjang tahun + musiman (Q4 naik)
       const growth = 1 + (month - 1) * 0.035;
       const seasonal = month >= 10 ? 1.15 : month <= 2 ? 0.9 : 1.0;
-      const categoryFactor = CATEGORY_WEIGHT[category] / 0.25; // rata 1
+      const categoryFactor = categoryWeights[category] / 0.25; // rata 1
       const day = 1 + Math.floor(rand() * 28);
 
       const baseRevenue = (8_000_000 + rand() * 30_000_000) * growth * seasonal * categoryFactor;
@@ -83,14 +108,15 @@ export function generateDemoDataset(): NormalizedTransaction[] {
 
       // Margin efektif = kombinasi margin kategori & departemen + noise + faktor kanal
       let margin =
-        CATEGORY_MARGIN[category] * 0.6 +
-        DEPARTMENT_MARGIN[department] * 0.4 -
+        categoryMargins[category] * 0.6 +
+        departmentMargins[department] * 0.4 -
         (channel === "Marketplace" ? 0.05 : 0) +
         (rand() - 0.5) * 0.08;
 
-      // Customer Success di bulan tertentu mengalami defisit (untuk insight anomali)
+      // Defisit periodik: SaaS di Customer Success; Retail di Layanan Pelanggan.
+      const deficitDept = isRetail ? "Layanan Pelanggan" : "Customer Success";
       const isDeficit =
-        department === "Customer Success" && rand() < 0.18 && month % 3 === 0;
+        department === deficitDept && rand() < 0.18 && month % 3 === 0;
       if (isDeficit) margin = -0.05 - rand() * 0.15;
 
       const expenses = Math.round((revenue * (1 - margin)) / 1000) * 1000;
@@ -130,9 +156,40 @@ export const DEMO_HEADERS = [
   "Budget",
 ];
 
-/** Dataset demo sebagai teks CSV (agar mengalir lewat pipeline parsing yang sama). */
-export function generateDemoCsv(): string {
-  const rows = generateDemoDataset();
+/** Pilihan skenario demo (audit Bagian B1). */
+export type DemoScenarioId = "saas" | "retail";
+
+export interface DemoScenario {
+  id: DemoScenarioId;
+  /** Judul singkat di tombol. */
+  title: string;
+  /** Deskripsi 1 baris untuk tooltip/helper text. */
+  description: string;
+  /** Nama file CSV yang akan tampil di header dashboard. */
+  fileName: string;
+}
+
+export const DEMO_SCENARIOS: DemoScenario[] = [
+  {
+    id: "saas",
+    title: "PT Nusantara Digital (SaaS & Tech)",
+    description: "Perusahaan SaaS: revenue tumbuh + seasonality Q4, margin tipis di Customer Success.",
+    fileName: "Dataset Demo — PT Nusantara Digital.csv",
+  },
+  {
+    id: "retail",
+    title: "Kopi Nusantara (Retail F&B)",
+    description: "Jaringan kopi retail: volume tinggi, margin tipis, ada defisit di kanal Marketplace.",
+    fileName: "Dataset Demo — Kopi Nusantara.csv",
+  },
+];
+
+/**
+ * Dataset demo sebagai teks CSV (agar mengalir lewat pipeline parsing yang sama).
+ * @param scenarioId Skenario yang dipilih (default "saas" untuk backward-compat).
+ */
+export function generateDemoCsv(scenarioId: DemoScenarioId = "saas"): string {
+  const rows = generateDemoDataset(scenarioId);
   const header = DEMO_HEADERS.join(",");
   const lines = rows.map((t) =>
     [
