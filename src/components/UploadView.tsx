@@ -6,7 +6,8 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, Sparkles, Download, ShieldCheck, Zap, PieChart } from "lucide-react";
+import { toast } from "sonner";
+import { BarChart3, Sparkles, Download, ShieldCheck, Zap, PieChart, ClipboardPaste, UploadCloud, Sparkle } from "lucide-react";
 import CsvDropzone from "@/components/CsvDropzone";
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,8 @@ import { useFinBoardStore } from "@/store/finBoardStore";
 import { setRawCsv } from "@/lib/sessionCsv";
 import { generateDemoCsv, DEMO_SCENARIOS, type DemoScenarioId } from "@/lib/demoDataset";
 import { parseCsv } from "@/lib/csvParser";
+import { isMappingSufficient } from "@/lib/columnMapper";
+import type { ParsedDataset } from "@/lib/types";
 
 const SKELETON_MIN_MS = 150;
 
@@ -37,9 +40,11 @@ const HIGHLIGHTS = [
 
 export default function UploadView() {
   const router = useRouter();
-  const { setDataset } = useFinBoardStore();
+  const { setDataset, setNeedsManualMapping } = useFinBoardStore();
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<DemoScenarioId>("saas");
+  const [inputMode, setInputMode] = useState<"upload" | "paste">("upload");
+  const [pasteText, setPasteText] = useState("");
 
   const scenario = DEMO_SCENARIOS.find((s) => s.id === selectedScenario) ?? DEMO_SCENARIOS[0];
 
@@ -61,22 +66,71 @@ export default function UploadView() {
     router.push("/dashboard");
   };
 
+  const handleAnalyzePaste = async () => {
+    const text = pasteText.trim();
+    if (!text) {
+      toast.error("Data kosong");
+      return;
+    }
+
+    const start = Date.now();
+    setShowSkeleton(true);
+
+    try {
+      setRawCsv(text, "Tempelan Excel.csv");
+      // Papa.parse auto-detect delimiter (\t / ';' / ','), jadi teks dari Excel/Sheets
+      // yang dicopy langsung (biasanya tab-delimited) terbaca tanpa preprocessing.
+      let ds: ParsedDataset;
+      let needsMapping = false;
+      try {
+        ds = parseCsv(text, "Tempelan Excel.csv");
+        needsMapping = !isMappingSufficient(ds.mapping);
+      } catch {
+        ds = parseCsv(text, "Tempelan Excel.csv", { allowPartial: true });
+        needsMapping = true;
+      }
+
+      const elapsed = Date.now() - start;
+      if (elapsed < SKELETON_MIN_MS) {
+        await new Promise((resolve) => setTimeout(resolve, SKELETON_MIN_MS - elapsed));
+      }
+
+      setDataset(ds);
+      if (needsMapping) {
+        setNeedsManualMapping(true);
+        toast.info("Beberapa kolom perlu dipetakan manual", {
+          description: "Silakan sesuaikan pemetaan kolom di dashboard.",
+        });
+      } else {
+        toast.success("Data berhasil diproses", {
+          description: `${ds.transactions.length} baris transaksi siap dianalisis.`,
+        });
+      }
+      router.push("/dashboard");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Gagal memproses data tempelan.";
+      toast.error("Gagal memproses data", { description: msg });
+      setShowSkeleton(false);
+    }
+  };
+
   const downloadSampleCsv = () => {
-    // Unduh CSV contoh kecil (10 baris) agar pengunjung bisa mengetes fitur upload.
-    const header = "Tanggal,Revenue,Expenses,Profit,Kategori,Departemen,Channel\n";
+    // Unduh CSV contoh kecil (10 baris, 8 kolom) agar pengunjung bisa mengetes fitur upload.
+    // BOM + directive `sep=;` + delimiter ';' agar Excel membuka file tanpa wizard import.
+    const header = "Tanggal;Revenue;Expenses;Profit;Kategori;Departemen;Channel;Budget\n";
     const rows = [
-      "2026-01-05,25000000,18000000,7000000,Langganan SaaS,Sales & Marketing,B2B Direct",
-      "2026-01-12,40000000,26000000,14000000,Technology,Engineering & Product,B2B Direct",
-      "2026-01-18,12000000,9000000,3000000,Layanan Konsultasi,Operations,Marketplace",
-      "2026-02-03,30000000,21000000,9000000,Produk Fisik,Operations,Kemitraan",
-      "2026-02-11,15000000,11000000,4000000,Langganan SaaS,Customer Success,Marketplace",
-      "2026-02-20,55000000,35000000,20000000,Technology,Engineering & Product,B2B Direct",
-      "2026-03-02,20000000,15500000,4500000,Layanan Konsultasi,Sales & Marketing,Kemitraan",
-      "2026-03-09,35000000,24000000,11000000,Produk Fisik,Operations,Marketplace",
-      "2026-03-15,8000000,8500000,-500000,Langganan SaaS,Customer Success,B2B Direct",
-      "2026-03-22,45000000,30000000,15000000,Technology,Engineering & Product,B2B Direct",
+      "2026-01-05;25000000;18000000;7000000;Langganan SaaS;Sales & Marketing;B2B Direct;25000000",
+      "2026-01-12;40000000;26000000;14000000;Technology;Engineering & Product;B2B Direct;40000000",
+      "2026-01-18;12000000;9000000;3000000;Layanan Konsultasi;Operations;Marketplace;13000000",
+      "2026-02-03;30000000;21000000;9000000;Produk Fisik;Operations;Kemitraan;28000000",
+      "2026-02-11;15000000;11000000;4000000;Langganan SaaS;Customer Success;Marketplace;15000000",
+      "2026-02-20;55000000;35000000;20000000;Technology;Engineering & Product;B2B Direct;52000000",
+      "2026-03-02;20000000;15500000;4500000;Layanan Konsultasi;Sales & Marketing;Kemitraan;20000000",
+      "2026-03-09;35000000;24000000;11000000;Produk Fisik;Operations;Marketplace;35000000",
+      "2026-03-15;8000000;8500000;-500000;Langganan SaaS;Customer Success;B2B Direct;9000000",
+      "2026-03-22;45000000;30000000;15000000;Technology;Engineering & Product;B2B Direct;44000000",
     ].join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob(["\uFEFF" + "sep=;\n" + header + rows], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -115,7 +169,62 @@ export default function UploadView() {
           </p>
         </div>
 
-        <CsvDropzone onParsed={() => router.push("/dashboard")} onParsingStart={handleParsingStart} onParsingError={handleParsingError} />
+        {/* Tab switcher: Upload File / Tempel dari Excel */}
+        <div className="mb-4 flex w-full rounded-xl border border-surface-border bg-surface p-1 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setInputMode("upload")}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+              inputMode === "upload"
+                ? "bg-white text-foreground shadow-card"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <UploadCloud className="h-4 w-4" />
+            Upload File CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setInputMode("paste")}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+              inputMode === "paste"
+                ? "bg-white text-foreground shadow-card"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ClipboardPaste className="h-4 w-4" />
+            Tempel dari Excel / CSV
+          </button>
+        </div>
+
+        {inputMode === "upload" ? (
+          <CsvDropzone onParsed={() => router.push("/dashboard")} onParsingStart={handleParsingStart} onParsingError={handleParsingError} />
+        ) : (
+          <div className="rounded-xl border border-surface-border bg-white p-4 shadow-card">
+            <div className="mb-2 flex items-center gap-2">
+              <ClipboardPaste className="h-4 w-4 text-primary" />
+              <p className="text-sm font-medium text-foreground">Tempel tabel dari Excel / Google Sheets</p>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Salin sel di Excel/Sheets (Ctrl/⌘+C) lalu tempel di bawah (Ctrl/⌘+V). Pemisah tab, titik-koma, dan koma didukung.
+            </p>
+            <textarea
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              placeholder={"Tanggal\tRevenue\tExpenses\tProfit\tKategori\tDepartemen\tChannel\tBudget\n2026-01-05\t25000000\t18000000\t7000000\tLangganan SaaS\tSales & Marketing\tB2B Direct\t25000000\n..."}
+              className="w-full min-h-[200px] rounded-lg border border-surface-border bg-surface/40 p-3 text-sm font-mono text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            />
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                {pasteText.trim() ? `${pasteText.trim().split(/\r?\n/).length} baris terdeteksi` : "Belum ada data"}
+              </p>
+              <Button onClick={handleAnalyzePaste} disabled={!pasteText.trim()} className="gap-2">
+                <Sparkle className="h-4 w-4" />
+                Analisis Data
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Badge kolom yang dikenali otomatis (UI Bagian 6) */}
         <div className="mt-4">

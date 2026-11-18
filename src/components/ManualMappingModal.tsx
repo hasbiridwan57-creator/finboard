@@ -5,7 +5,7 @@
  * Fallback ketika heuristik gagal mendeteksi kolom wajib.
  * Dibangun di atas komponen Dialog shadcn/ui.
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import type { CanonicalField, ColumnMapping } from "@/lib/types";
 import { isMappingSufficient } from "@/lib/columnMapper";
 import { reparseWithMapping } from "@/lib/sessionCsv";
+import { formatCurrency } from "@/lib/format";
 import { useFinBoardStore } from "@/store/finBoardStore";
 
 const FIELD_LABELS: Record<CanonicalField, { label: string; required: boolean; hint: string }> = {
@@ -48,7 +49,11 @@ interface Props {
 export default function ManualMappingModal({ open, headers, initialMapping, onClose }: Props) {
   const [mapping, setMapping] = useState<ColumnMapping>(initialMapping);
   const [applyError, setApplyError] = useState<string | null>(null);
-  const { setDataset } = useFinBoardStore();
+  const { setDataset, currency, exchangeRate } = useFinBoardStore();
+
+  // Sinkronkan state `mapping` ketika `initialMapping` berubah dari luar
+  // (mis. parent memuat ulang pemetaan setelah proses parse baru).
+  useEffect(() => setMapping(initialMapping), [initialMapping]);
 
   // 3 baris pertama untuk pratinjau (PRD US-03).
   // Dependency [mapping]: pratinjau ikut ter-update saat user mengubah pilihan dropdown.
@@ -135,13 +140,29 @@ export default function ManualMappingModal({ open, headers, initialMapping, onCl
               <p className="mb-2 text-sm font-medium text-foreground">Pratinjau 3 baris pertama:</p>
               <div className="overflow-x-auto rounded-lg border border-surface-border">
                 <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-surface-border bg-muted/40 text-left">
+                      <th className="px-3 py-2 font-medium text-muted-foreground">Tanggal</th>
+                      <th className="px-3 py-2 font-medium text-muted-foreground">Revenue</th>
+                      <th className="px-3 py-2 font-medium text-muted-foreground">Expenses</th>
+                      <th className="px-3 py-2 font-medium text-muted-foreground">Profit</th>
+                      <th className="px-3 py-2 font-medium text-muted-foreground">Kategori</th>
+                      <th className="px-3 py-2 font-medium text-muted-foreground">Departemen</th>
+                      <th className="px-3 py-2 font-medium text-muted-foreground">Kanal</th>
+                      <th className="px-3 py-2 font-medium text-muted-foreground">Budget</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {preview.map((t, i) => (
                       <tr key={i} className={i % 2 ? "bg-secondary" : ""}>
                         <td className="px-3 py-2 tabular-nums">{t.date}</td>
-                        <td className="px-3 py-2 tabular-nums">Rp {t.revenue.toLocaleString("id-ID")}</td>
-                        <td className="px-3 py-2 tabular-nums">Rp {t.expenses.toLocaleString("id-ID")}</td>
-                        <td className="px-3 py-2 tabular-nums">Rp {t.profit.toLocaleString("id-ID")}</td>
+                        <td className="px-3 py-2 tabular-nums">{formatCurrency(t.revenue, currency, false, exchangeRate)}</td>
+                        <td className="px-3 py-2 tabular-nums">{formatCurrency(t.expenses, currency, false, exchangeRate)}</td>
+                        <td className="px-3 py-2 tabular-nums">{formatCurrency(t.profit, currency, false, exchangeRate)}</td>
+                        <td className="px-3 py-2">{t.category || "—"}</td>
+                        <td className="px-3 py-2">{t.department || "—"}</td>
+                        <td className="px-3 py-2">{t.channel || "—"}</td>
+                        <td className="px-3 py-2 tabular-nums">{t.budget === null ? "—" : formatCurrency(t.budget, currency, false, exchangeRate)}</td>
                       </tr>
                     ))}
                   </tbody>

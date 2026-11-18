@@ -47,6 +47,7 @@ export function parseCsv(
 
   const result = Papa.parse<Record<string, string>>(text, {
     header: true,
+    delimiter: "", // auto-detect tab / ';' / ',' (Excel paste & Sheets export)
     skipEmptyLines: "greedy",
     dynamicTyping: false,
     transformHeader: (h) => h.replace(/^\uFEFF/, "").trim(),

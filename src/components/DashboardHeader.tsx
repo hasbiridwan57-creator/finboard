@@ -13,8 +13,8 @@ import {
   RefreshCw,
   Settings2,
   Table2,
-  TriangleAlert,
   ChevronDown,
+  ShieldCheck,
 } from "lucide-react";
 import { useFinBoardStore } from "@/store/finBoardStore";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,24 @@ import { computeKpi } from "@/lib/kpiCalculator";
 import { applyFilter } from "@/lib/chartAggregator";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { generateInsights } from "@/lib/insightGenerator";
-import type { NormalizedTransaction } from "@/lib/types";
+import type { CanonicalField, NormalizedTransaction } from "@/lib/types";
+
+/** Label Indonesia untuk setiap field kanonik (dipakai popover kesehatan data). */
+const FIELD_LABELS_ID: Record<CanonicalField, string> = {
+  date: "Tanggal",
+  revenue: "Revenue",
+  expenses: "Expenses",
+  profit: "Profit",
+  category: "Kategori",
+  department: "Departemen",
+  channel: "Kanal",
+  budget: "Budget",
+};
+
+const FIELD_ORDER: CanonicalField[] = [
+  "date", "revenue", "expenses", "profit",
+  "category", "department", "channel", "budget",
+];
 
 /** Salin ringkasan KPI + poin insight ke clipboard (B2). */
 async function copySummary(
@@ -130,7 +147,6 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
   const { dataset, filter, clearSession, currency, setCurrency, exchangeRate } = useFinBoardStore();
   if (!dataset) return null;
 
-  const cleanedRows = dataset.invalidDateRows + dataset.cleanedNumericCells;
   const filteredTxs = applyFilter(dataset.transactions, filter);
 
   const handleCopy = async () => {
@@ -178,15 +194,68 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
           </span>
         </div>
 
-        {cleanedRows > 0 && (
-          <span
-            title={`${dataset.invalidDateRows} baris tanggal tidak valid & ${dataset.cleanedNumericCells} sel angka tidak valid dinormalisasi ke 0.`}
-            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
-          >
-            <TriangleAlert className="h-3.5 w-3.5" />
-            <span className="tabular-nums">{cleanedRows} sel dibersihkan</span>
-          </span>
-        )}
+        {/* Popover Kesehatan Data & Pemetaan (M2.4): ringkasan kualitas + pemetaan aktif. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              title="Lihat ringkasan kesehatan data & pemetaan kolom aktif."
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-surface-border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-slate-50"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-success" />
+              <span className="hidden sm:inline">Kesehatan Data</span>
+              {(dataset.invalidDateRows > 0 || dataset.cleanedNumericCells > 0) && (
+                <span
+                  className="flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-700"
+                  aria-label={`${dataset.invalidDateRows} baris tanggal tidak valid, ${dataset.cleanedNumericCells} sel angka dinormalisasi`}
+                >
+                  {dataset.invalidDateRows > 0 && (
+                    <span>{dataset.invalidDateRows} tgl</span>
+                  )}
+                  {dataset.cleanedNumericCells > 0 && (
+                    <span>{dataset.cleanedNumericCells} sel</span>
+                  )}
+                </span>
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-80">
+            <p className="mb-2 text-sm font-semibold text-foreground">Kesehatan Data &amp; Pemetaan</p>
+            <dl className="mb-3 space-y-1 text-xs">
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">Total baris valid</dt>
+                <dd className="font-medium tabular-nums text-foreground">
+                  {dataset.transactions.length}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">Baris tanggal tak valid (dilewati)</dt>
+                <dd className="font-medium tabular-nums text-foreground">
+                  {dataset.invalidDateRows}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">Sel angka kosong → 0</dt>
+                <dd className="font-medium tabular-nums text-foreground">
+                  {dataset.cleanedNumericCells}
+                </dd>
+              </div>
+            </dl>
+            <p className="mb-1.5 border-t border-surface-border pt-2 text-xs font-semibold text-foreground">
+              Pemetaan Kolom Aktif
+            </p>
+            <ul className="space-y-1 text-xs">
+              {FIELD_ORDER.map((f) => (
+                <li key={f} className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">{FIELD_LABELS_ID[f]}</span>
+                  <span className="truncate font-medium text-foreground" title={dataset.mapping[f] ?? undefined}>
+                    → {dataset.mapping[f] ?? "—"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </PopoverContent>
+        </Popover>
 
         <div className="ml-auto flex items-center gap-2">
           {/* Toggle mata uang + input kurs (B4). USD = konversi IDR via kurs manual. */}

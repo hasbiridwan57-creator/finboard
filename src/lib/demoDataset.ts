@@ -16,37 +16,124 @@ function seededRandom(seed: number) {
   };
 }
 
-const CATEGORIES = ["Technology", "Layanan Konsultasi", "Produk Fisik", "Langganan SaaS"];
-const DEPARTMENTS = ["Engineering & Product", "Sales & Marketing", "Operations", "Customer Success"];
-const CHANNELS = ["B2B Direct", "Marketplace", "Kemitraan"];
+/** ID skenario demo yang tersedia. */
+export type DemoScenarioId = "saas" | "retail" | "ecom";
 
-/** Bobot kontribusi revenue per kategori (Technology dominan untuk insight #1). */
-const CATEGORY_WEIGHT: Record<string, number> = {
-  Technology: 0.4,
-  "Layanan Konsultasi": 0.28,
-  "Produk Fisik": 0.2,
-  "Langganan SaaS": 0.12,
+/** Konfigurasi lengkap per skenario — menggantikan branching boolean isRetail. */
+interface ScenarioConfig {
+  categories: string[];
+  departments: string[];
+  channels: string[];
+  categoryWeights: Record<string, number>;
+  categoryMargins: Record<string, number>;
+  departmentMargins: Record<string, number>;
+  channelWeights: Record<string, number>;
+  /** Departemen yang akan mengalami defisit periodik (insight anomali). */
+  deficitDept: string;
+  seed: number;
+}
+
+const SAAS_CONFIG: ScenarioConfig = {
+  categories: ["Technology", "Layanan Konsultasi", "Produk Fisik", "Langganan SaaS"],
+  departments: ["Engineering & Product", "Sales & Marketing", "Operations", "Customer Success"],
+  channels: ["B2B Direct", "Marketplace", "Kemitraan"],
+  // Bobot kontribusi revenue per kategori (Technology dominan untuk insight #1).
+  categoryWeights: {
+    Technology: 0.4,
+    "Layanan Konsultasi": 0.28,
+    "Produk Fisik": 0.2,
+    "Langganan SaaS": 0.12,
+  },
+  // Faktor margin per kategori. Customer Success akan menghasilkan defisit (insight anomali).
+  categoryMargins: {
+    Technology: 0.42,
+    "Layanan Konsultasi": 0.35,
+    "Produk Fisik": 0.22,
+    "Langganan SaaS": 0.5,
+  },
+  departmentMargins: {
+    "Engineering & Product": 0.4,
+    "Sales & Marketing": 0.3,
+    Operations: 0.25,
+    "Customer Success": 0.05, // margin tipis → sering defisit di bulan tertentu
+  },
+  channelWeights: {
+    "B2B Direct": 0.5,
+    Marketplace: 0.3,
+    Kemitraan: 0.2,
+  },
+  deficitDept: "Customer Success",
+  seed: 20260117,
 };
 
-/** Faktor margin per kategori. Customer Success akan menghasilkan defisit (insight anomali). */
-const CATEGORY_MARGIN: Record<string, number> = {
-  Technology: 0.42,
-  "Layanan Konsultasi": 0.35,
-  "Produk Fisik": 0.22,
-  "Langganan SaaS": 0.5,
+const RETAIL_CONFIG: ScenarioConfig = {
+  categories: ["Kopi & Minuman", "Makanan Ringan", "Merchandise", "Katering"],
+  departments: ["Operasional Outlet", "Pemasaran", "Riset & Pengembangan", "Layanan Pelanggan"],
+  channels: ["Gerai Fisik", "Marketplace", "Pesanan Online"],
+  categoryWeights: {
+    "Kopi & Minuman": 0.5,
+    "Makanan Ringan": 0.25,
+    Merchandise: 0.15,
+    Katering: 0.1,
+  },
+  categoryMargins: {
+    "Kopi & Minuman": 0.55,
+    "Makanan Ringan": 0.4,
+    Merchandise: 0.5,
+    Katering: 0.3,
+  },
+  departmentMargins: {
+    "Operasional Outlet": 0.32,
+    Pemasaran: 0.2,
+    "Riset & Pengembangan": 0.15,
+    "Layanan Pelanggan": 0.05,
+  },
+  channelWeights: {
+    "Gerai Fisik": 0.55,
+    Marketplace: 0.3,
+    "Pesanan Online": 0.15,
+  },
+  deficitDept: "Layanan Pelanggan",
+  seed: 20260214,
 };
 
-const DEPARTMENT_MARGIN: Record<string, number> = {
-  "Engineering & Product": 0.4,
-  "Sales & Marketing": 0.3,
-  Operations: 0.25,
-  "Customer Success": 0.05, // margin tipis → sering defisit di bulan tertentu
+const ECOM_CONFIG: ScenarioConfig = {
+  categories: ["Fashion", "Elektronik", "FMCG", "Rumah Tangga"],
+  departments: ["Merchandising", "Fulfillment", "Growth & Promo", "CS & Retensi"],
+  channels: ["Marketplace", "Aplikasi", "Website", "TikTok Shop"],
+  categoryWeights: {
+    Fashion: 0.35,
+    Elektronik: 0.25,
+    FMCG: 0.28,
+    "Rumah Tangga": 0.12,
+  },
+  categoryMargins: {
+    Fashion: 0.45,
+    Elektronik: 0.18,
+    FMCG: 0.28,
+    "Rumah Tangga": 0.32,
+  },
+  departmentMargins: {
+    Merchandising: 0.35,
+    Fulfillment: 0.15,
+    "Growth & Promo": 0.22,
+    "CS & Retensi": 0.18,
+  },
+  channelWeights: {
+    Marketplace: 0.4,
+    Aplikasi: 0.3,
+    Website: 0.15,
+    "TikTok Shop": 0.15,
+  },
+  deficitDept: "Growth & Promo",
+  seed: 20260301,
 };
 
-const CHANNEL_WEIGHT: Record<string, number> = {
-  "B2B Direct": 0.5,
-  Marketplace: 0.3,
-  Kemitraan: 0.2,
+/** Registry config per skenario — sumber kebenaran tunggal untuk generateDemoDataset. */
+const SCENARIO_CONFIGS: Record<DemoScenarioId, ScenarioConfig> = {
+  saas: SAAS_CONFIG,
+  retail: RETAIL_CONFIG,
+  ecom: ECOM_CONFIG,
 };
 
 function pickWeighted<K extends string>(keys: K[], weights: Record<string, number>, r: number): K {
@@ -60,35 +147,13 @@ function pickWeighted<K extends string>(keys: K[], weights: Record<string, numbe
 }
 
 export function generateDemoDataset(scenarioId: DemoScenarioId = "saas"): NormalizedTransaction[] {
-  const isRetail = scenarioId === "retail";
-  // Seed & config berbeda per skenario agar pola data berbeda namun tetap deterministik.
-  const rand = seededRandom(isRetail ? 20260214 : 20260117);
+  const config = SCENARIO_CONFIGS[scenarioId];
+  const rand = seededRandom(config.seed);
   const transactions: NormalizedTransaction[] = [];
   const year = 2026;
   let id = 0;
 
-  // Skenario Retail: kategori menu F&B, departemen operasional outlet, kanal jual.
-  const categories = isRetail
-    ? ["Kopi & Minuman", "Makanan Ringan", "Merchandise", "Katering"]
-    : CATEGORIES;
-  const departments = isRetail
-    ? ["Operasional Outlet", "Pemasaran", "Riset & Pengembangan", "Layanan Pelanggan"]
-    : DEPARTMENTS;
-  const channels = isRetail
-    ? ["Gerai Fisik", "Marketplace", "Pesanan Online"]
-    : CHANNELS;
-  const categoryWeights = isRetail
-    ? { "Kopi & Minuman": 0.5, "Makanan Ringan": 0.25, Merchandise: 0.15, Katering: 0.1 }
-    : CATEGORY_WEIGHT;
-  const categoryMargins = isRetail
-    ? { "Kopi & Minuman": 0.55, "Makanan Ringan": 0.4, Merchandise: 0.5, Katering: 0.3 }
-    : CATEGORY_MARGIN;
-  const departmentMargins = isRetail
-    ? { "Operasional Outlet": 0.32, Pemasaran: 0.2, "Riset & Pengembangan": 0.15, "Layanan Pelanggan": 0.05 }
-    : DEPARTMENT_MARGIN;
-  const channelWeights = isRetail
-    ? { "Gerai Fisik": 0.55, Marketplace: 0.3, "Pesanan Online": 0.15 }
-    : CHANNEL_WEIGHT;
+  const { categories, departments, channels, categoryWeights, categoryMargins, departmentMargins, channelWeights, deficitDept } = config;
 
   for (let month = 1; month <= 12; month++) {
     // Transaksi per bulan: 30 baris
@@ -107,14 +172,14 @@ export function generateDemoDataset(scenarioId: DemoScenarioId = "saas"): Normal
       const revenue = Math.max(1_000_000, Math.round(baseRevenue / 1000) * 1000);
 
       // Margin efektif = kombinasi margin kategori & departemen + noise + faktor kanal
+      // Kanal promo-heavy (Marketplace, TikTok Shop) mendapat potongan margin -0.05.
       let margin =
         categoryMargins[category] * 0.6 +
         departmentMargins[department] * 0.4 -
-        (channel === "Marketplace" ? 0.05 : 0) +
+        (channel === "Marketplace" || channel === "TikTok Shop" ? 0.05 : 0) +
         (rand() - 0.5) * 0.08;
 
-      // Defisit periodik: SaaS di Customer Success; Retail di Layanan Pelanggan.
-      const deficitDept = isRetail ? "Layanan Pelanggan" : "Customer Success";
+      // Defisit periodik pada departemen yang ditandai di config skenario.
       const isDeficit =
         department === deficitDept && rand() < 0.18 && month % 3 === 0;
       if (isDeficit) margin = -0.05 - rand() * 0.15;
@@ -157,7 +222,6 @@ export const DEMO_HEADERS = [
 ];
 
 /** Pilihan skenario demo (audit Bagian B1). */
-export type DemoScenarioId = "saas" | "retail";
 
 export interface DemoScenario {
   id: DemoScenarioId;
@@ -181,6 +245,12 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     title: "Kopi Nusantara (Retail F&B)",
     description: "Jaringan kopi retail: volume tinggi, margin tipis, ada defisit di kanal Marketplace.",
     fileName: "Dataset Demo — Kopi Nusantara.csv",
+  },
+  {
+    id: "ecom",
+    title: "NusaMart E-Commerce (Omnichannel)",
+    description: "Omnichannel e-commerce: kanal Marketplace & Aplikasi dominan, volume tinggi, kategori Fashion/Elektronik/FMCG, margin promo bervariasi.",
+    fileName: "Dataset Demo — NusaMart E-Commerce.csv",
   },
 ];
 
