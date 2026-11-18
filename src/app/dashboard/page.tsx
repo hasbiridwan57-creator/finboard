@@ -33,6 +33,7 @@ import {
   ChannelProfitChart,
 } from "@/components/charts";
 import InsightsPanel from "@/components/InsightsPanel";
+import MonthlyPnLTable from "@/components/MonthlyPnLTable";
 import TransactionTable from "@/components/TransactionTable";
 import ManualMappingModal from "@/components/ManualMappingModal";
 
@@ -103,6 +104,15 @@ function DashboardContent() {
   const expenseRatio = kpi.totalRevenue > 0 ? (kpi.totalExpenses / kpi.totalRevenue) * 100 : 0;
   const monthCount = monthly.length;
   const avgProfitPerPeriod = monthCount > 0 ? kpi.totalProfit / monthCount : 0;
+
+  // Data sparkline mini-tren bulanan untuk tiap KPI card (Gemini M3.1).
+  const sparkRevenue = useMemo(() => monthly.map((m) => m.revenue), [monthly]);
+  const sparkExpenses = useMemo(() => monthly.map((m) => m.expenses), [monthly]);
+  const sparkProfit = useMemo(() => monthly.map((m) => m.profit), [monthly]);
+  const sparkMargin = useMemo(
+    () => monthly.map((m) => (m.revenue > 0 ? (m.profit / m.revenue) * 100 : 0)),
+    [monthly],
+  );
   // Rentang hari aktif (untuk default granularitas tren: ≤45 hari → Harian).
   const activeDays = useMemo(() => {
     if (filtered.length === 0) return 0;
@@ -149,6 +159,7 @@ function DashboardContent() {
             goodWhenUp
             tooltip={formatCurrency(kpi.totalRevenue, currency, false)}
             subtitle={`Rata-rata ${formatCurrency(avgPerTx, currency)} / transaksi`}
+            sparkline={sparkRevenue}
             index={0}
           />
           <KpiCard
@@ -158,6 +169,7 @@ function DashboardContent() {
             goodWhenUp={false}
             tooltip={formatCurrency(kpi.totalExpenses, currency, false)}
             subtitle={`Rasio biaya: ${formatPercent(expenseRatio)} dari revenue`}
+            sparkline={sparkExpenses}
             index={1}
           />
           <KpiCard
@@ -167,6 +179,7 @@ function DashboardContent() {
             goodWhenUp
             tooltip={formatCurrency(kpi.totalProfit, currency, false)}
             subtitle={`Rata-rata ${formatCurrency(avgProfitPerPeriod, currency)} / periode`}
+            sparkline={sparkProfit}
             index={2}
           />
           <KpiCard
@@ -174,6 +187,7 @@ function DashboardContent() {
             value={formatPercent(kpi.profitMargin)}
             delta={deltas.margin}
             goodWhenUp
+            sparkline={sparkMargin}
             subtitle={
               kpi.profitMargin >= 20
                 ? "Margin sehat"
@@ -203,6 +217,9 @@ function DashboardContent() {
           <DepartmentProfitChart data={deptData} />
           <ChannelProfitChart data={channelData} />
         </div>
+
+        {/* Monthly P&L Statement (FP&A style, collapsible) */}
+        <MonthlyPnLTable monthly={monthly} hasBudget={budgetAvailable} />
 
         {/* Insights */}
         <InsightsPanel insights={insights} />
