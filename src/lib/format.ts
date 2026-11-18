@@ -10,6 +10,8 @@
  * - Sel kosong / tidak valid → 0
  */
 
+import { useFinBoardStore } from "@/store/finBoardStore";
+
 const CURRENCY_SYMBOLS = /(?:rp|idr|usd|\$|€|£)/gi;
 
 /** Hapus simbol mata uang, spasi, dan karakter non-numerik kecuali pemisah & minus. */
@@ -165,12 +167,15 @@ export function formatPercent(value: number, decimals = 1): string {
 }
 
 /**
- * Format mata uang generik sesuai mode (PRD/audit Bagian B4).
- * - IDR: gunakan formatRupiah di atas (compact / penuh).
- * - USD: "$1.2 M" (compact) / "$1,234,567" (penuh), pemisah gaya US.
+ * Format mata uang generik sesuai mode (PRD/audit Bagian B4 + konversi kurs).
+ * - IDR: gunakan formatRupiah di atas (compact / penuh), nilai apa adanya.
+ * - USD: nilai KONVERSI dari IDR memakai kurs tersimpan (IDR / rate), lalu format US.
+ *     "Rp 1.000.000" @ kurs 15.750 → "$63" (compact/penuh).
  *
- * CATATAN: ini HANYA mengubah TAMPILAN format angka, bukan konversi kurs.
- * Data tetap disimpan dalam satuan asli CSV.
+ * Kurs dibaca dari store (single source of truth) agar SEMUA titik format
+ * (KPI, tabel, chart, insight, tooltip) otomatis konsisten terkonversi —
+ * tanpa harus tiap call-site meneruskan kurs secara manual.
+ * Data mentah di store tetap IDR; konversi hanya terjadi saat formatting.
  */
 export function formatCurrency(
   value: number,
@@ -178,15 +183,29 @@ export function formatCurrency(
   compact = true,
 ): string {
   if (mode === "IDR") return formatRupiah(value, compact);
-  const abs = Math.abs(value);
-  const sign = value < 0 ? "-" : "";
-  const usd = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+
+  // Mode USD: konversi IDR → USD memakai kurs terkini dari store.
+  const rate = getExchangeRate();
+  const converted = rate > 0 ? value / rate : value;
+
+  const abs = Math.abs(converted);
+  const sign = converted < 0 ? "-" : "";
+  const usd = new Intl.NumberFormat("en-US", { maximumFractionDigits: abs < 100 ? 2 : 0 });
   if (compact) {
     if (abs >= 1_000_000_000) return `${sign}$${trimNumUsd(abs / 1_000_000_000)}B`;
     if (abs >= 1_000_000) return `${sign}$${trimNumUsd(abs / 1_000_000)}M`;
     if (abs >= 1_000) return `${sign}$${trimNumUsd(abs / 1_000)}K`;
   }
   return `${sign}$${usd.format(abs)}`;
+}
+
+/** Ambil kurs IDR→USD terkini dari store (vanilla access, aman di luar React). */
+function getExchangeRate(): number {
+  try {
+    return useFinBoardStore.getState().exchangeRate;
+  } catch {
+    return 1; // fallback ekstrem — tak seharusnya terjadi
+  }
 }
 
 /** trimNum gaya US (desimal titik), maks 2 signifikan. */

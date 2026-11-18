@@ -2,6 +2,7 @@
 
 /** Header dashboard (PRD FR-UPL-04) + badge kualitas data, toggle mata uang (B4), ekspor laporan (B2). */
 import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   BarChart3,
@@ -76,6 +77,53 @@ function downloadFilteredCsv(txs: NormalizedTransaction[], fileName: string): vo
   URL.revokeObjectURL(url);
 }
 
+/** Input kurs IDR→USD (opsi 1). USD = IDR / kurs; tersimpan di localStorage via store. */
+function ExchangeRateInput() {
+  const { exchangeRate, setExchangeRate } = useFinBoardStore();
+  const [draft, setDraft] = useState(String(exchangeRate));
+
+  // Sinkronkan draft bila kurs diubah dari tempat lain (mis. reset).
+  useEffect(() => {
+    setDraft(String(exchangeRate));
+  }, [exchangeRate]);
+
+  const commit = () => {
+    const n = parseFloat(draft.replace(/[^\d.]/g, ""));
+    if (Number.isFinite(n) && n > 0) {
+      setExchangeRate(n);
+    } else {
+      setDraft(String(exchangeRate)); // kembalikan ke nilai valid
+    }
+  };
+
+  return (
+    <label
+      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      title="Kurs IDR→USD. Nominal USD dihitung = IDR ÷ kurs."
+    >
+      <span className="whitespace-nowrap">Kurs 1$ =</span>
+      <span className="relative">
+        <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted-foreground">Rp</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              commit();
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          aria-label="Kurs IDR ke USD"
+          className="h-7 w-24 rounded-md border border-surface-border bg-background pl-7 pr-2 text-right text-xs tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+        />
+      </span>
+    </label>
+  );
+}
+
 export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () => void }) {
   const router = useRouter();
   const { dataset, filter, clearSession, currency, setCurrency } = useFinBoardStore();
@@ -140,7 +188,7 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Toggle mata uang tampilan (B4): hanya mengubah format, bukan konversi kurs. */}
+          {/* Toggle mata uang + input kurs (B4). USD = konversi IDR via kurs manual. */}
           <div className="inline-flex rounded-lg border border-surface-border bg-background p-0.5">
             {(["IDR", "USD"] as const).map((m) => (
               <Button
@@ -155,6 +203,9 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
               </Button>
             ))}
           </div>
+          {/* Input kurs IDR→USD (opsi 1): hanya muncul saat mode USD aktif.
+              Nominal USD = IDR / kurs; tanpa API, client-side penuh. */}
+          {currency === "USD" && <ExchangeRateInput />}
           {/* Menu Ekspor: gabungkan Salin Ringkasan + Ekspor CSV + Cetak PDF (UI Bagian 2)
               agar header tetap ringkas 1 baris di tablet & mobile. */}
           <Popover>

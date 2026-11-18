@@ -9,6 +9,33 @@ import type { ColumnMapping, GlobalFilterState, ParsedDataset } from "@/lib/type
 /** Mode tampilan mata uang (PRD/audit Bagian B4). */
 export type CurrencyMode = "IDR" | "USD";
 
+/** Kurs default IDR→USD (dapat diubah user; konversi client-side, tanpa API). */
+export const DEFAULT_USD_RATE = 15750;
+const RATE_KEY = "finboard.usdRate";
+
+/** Baca kurs tersimpan dari localStorage (fallback default). */
+function loadRate(): number {
+  try {
+    const raw = localStorage.getItem(RATE_KEY);
+    if (raw) {
+      const n = parseFloat(raw);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_USD_RATE;
+}
+
+/** Simpan kurs ke localStorage (ringan, bukan data transaksi). */
+function saveRate(rate: number) {
+  try {
+    localStorage.setItem(RATE_KEY, String(rate));
+  } catch {
+    /* ignore */
+  }
+}
+
 interface FinBoardState {
   dataset: ParsedDataset | null;
   filter: GlobalFilterState;
@@ -16,6 +43,8 @@ interface FinBoardState {
   needsManualMapping: boolean;
   /** mode tampilan mata uang untuk format angka (default IDR) */
   currency: CurrencyMode;
+  /** kurs IDR→USD yang dipakai saat mode USD (angka diubah = nilai / rate) */
+  exchangeRate: number;
 
   setDataset: (ds: ParsedDataset) => void;
   setMapping: (mapping: ColumnMapping) => void;
@@ -25,6 +54,8 @@ interface FinBoardState {
   clearSession: () => void;
   setNeedsManualMapping: (v: boolean) => void;
   setCurrency: (c: CurrencyMode) => void;
+  /** ubah kurs IDR→USD; validasi > 0 */
+  setExchangeRate: (rate: number) => void;
 }
 
 export const emptyFilter: GlobalFilterState = {
@@ -39,6 +70,7 @@ export const useFinBoardStore = create<FinBoardState>((set) => ({
   filter: emptyFilter,
   needsManualMapping: false,
   currency: "IDR",
+  exchangeRate: loadRate(),
 
   setDataset: (ds) => {
     set({ dataset: ds, filter: emptyFilter, needsManualMapping: false });
@@ -66,6 +98,12 @@ export const useFinBoardStore = create<FinBoardState>((set) => ({
   setNeedsManualMapping: (v) => set({ needsManualMapping: v }),
 
   setCurrency: (c) => set({ currency: c }),
+
+  setExchangeRate: (rate) => {
+    if (!Number.isFinite(rate) || rate <= 0) return; // validasi: tolak nilai tak valid
+    set({ exchangeRate: rate });
+    saveRate(rate);
+  },
 }));
 
 /** Simpan hanya metadata ringan (PRD §13). */
