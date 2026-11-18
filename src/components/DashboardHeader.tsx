@@ -1,9 +1,10 @@
 "use client";
 
-/** Header dashboard (PRD FR-UPL-04) + badge kualitas data, toggle mata uang (B4), ekspor laporan (B2). */
+/** Header dashboard (PRD FR-UPL-04) + badge kualitas data, toggle mata uang (B4), ekspor laporan (B2, M6.1), pintasan keyboard + panduan (M6.3). */
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
+import { format } from "date-fns";
 import {
   BarChart3,
   ClipboardCopy,
@@ -15,10 +16,21 @@ import {
   Table2,
   ChevronDown,
   ShieldCheck,
+  HelpCircle,
+  FileText,
+  Keyboard,
 } from "lucide-react";
 import { useFinBoardStore } from "@/store/finBoardStore";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { computeKpi } from "@/lib/kpiCalculator";
 import { applyFilter } from "@/lib/chartAggregator";
 import { formatCurrency, formatPercent } from "@/lib/format";
@@ -65,26 +77,23 @@ async function copySummary(
   await navigator.clipboard.writeText(lines.join("\n"));
 }
 
-/** Unduh transaksi terfilter sebagai CSV (B2). */
-function downloadFilteredCsv(txs: NormalizedTransaction[], fileName: string): void {
-  const header = "Tanggal,Revenue,Expenses,Profit,Kategori,Departemen,Channel,Budget";
-  const escape = (v: string | number) => {
-    const s = String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const rows = txs.map((t) =>
-    [
-      t.date,
-      t.revenue,
-      t.expenses,
-      t.profit,
-      t.category,
-      t.department,
-      t.channel,
-      t.budget ?? "",
-    ].map(escape).join(","),
-  );
-  const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+/** Helper CSV: escape sel sesuai RFC4180 (kutip bila ada ; " atau newline). */
+function csvEscape(value: string | number): string {
+  const s = String(value);
+  return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Helper CSV: nilai nominal murni (tanpa simbol) sesuai mode mata uang. */
+function csvNumber(value: number, currency: "IDR" | "USD", exchangeRate: number): string {
+  if (currency === "USD") {
+    return (value / exchangeRate).toFixed(2);
+  }
+  return String(Math.round(value));
+}
+
+/** Unduh teks sebagai file via Blob + anchor sementara. */
+function downloadTextFile(content: string, fileName: string, mime: string): void {
+  const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -93,6 +102,141 @@ function downloadFilteredCsv(txs: NormalizedTransaction[], fileName: string): vo
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/** Ringkas status filter aktif jadi satu baris untuk header laporan CSV. */
+function describeFilter(
+  filter: { dateRange: { from: string | null; to: string | null }; categories: string[]; departments: string[]; channels: string[] },
+): string {
+  const parts: string[] = [];
+  if (filter.dateRange.from || filter.dateRange.to) {
+    const from = filter.dateRange.from ? filter.dateRange.from : "awal";
+    const to = filter.dateRange.to ? filter.dateRange.to : "akhir";
+    parts.push(`rentang tanggal: ${from} s.d. ${to}`);
+  }
+  if (filter.categories.length > 0) parts.push(`kategori: ${filter.categories.join(", ")}`);
+  if (filter.departments.length > 0) parts.push(`departemen: ${filter.departments.join(", ")}`);
+  if (filter.channels.length > 0) parts.push(`kanal: ${filter.channels.join(", ")}`);
+  return parts.length > 0 ? parts.join("; ") : "Semua";
+}
+
+/** Ekspor CSV ber-template laporan (M6.1): header laporan + ringkasan eksekutif + rincian transaksi. */
+function exportReportCsv(
+  txs: NormalizedTransaction[],
+  fileName: string,
+  currency: "IDR" | "USD",
+  exchangeRate: number,
+  filterDesc: string,
+): void {
+  const kpi = computeKpi(txs);
+  const today = new Date();
+  const sep = ";";
+  const eol = "\r\n";
+  const lines: string[] = [];
+
+  lines.push("sep=;");
+  lines.push("LAPORAN ANALITIK KEUANGAN — FINBOARD");
+  lines.push(`Sumber Data;${fileName}`);
+  lines.push(`Tanggal Ekspor;${format(today, "dd MMM yyyy")}`);
+  const currencyLabel =
+    currency === "USD"
+      ? `USD (kurs 1 USD = Rp ${exchangeRate.toFixed(0)})`
+      : "IDR";
+  lines.push(`Mata Uang;${currencyLabel}`);
+  lines.push(`Filter Aktif;${filterDesc}`);
+  lines.push("");
+
+  lines.push("RINGKASAN EKSEKUTIF");
+  lines.push(`Metrik;Nilai`);
+  lines.push(`Total Revenue;${csvNumber(kpi.totalRevenue, currency, exchangeRate)}`);
+  lines.push(`Total Expenses;${csvNumber(kpi.totalExpenses, currency, exchangeRate)}`);
+  lines.push(`Total Profit;${csvNumber(kpi.totalProfit, currency, exchangeRate)}`);
+  lines.push(`Profit Margin (%);${kpi.profitMargin.toFixed(2)}`);
+  lines.push("");
+
+  lines.push("RINCIAN TRANSAKSI TERFILTER");
+  lines.push(
+    ["No", "Tanggal", "Kategori", "Departemen", "Kanal Penjualan", "Revenue", "Expenses", "Profit", "Margin (%)", "Budget"].join(sep),
+  );
+  let sumRevenue = 0;
+  let sumExpenses = 0;
+  let sumProfit = 0;
+  let sumBudget = 0;
+  txs.forEach((t, idx) => {
+    sumRevenue += t.revenue;
+    sumExpenses += t.expenses;
+    sumProfit += t.profit;
+    if (t.budget !== null) sumBudget += t.budget;
+    const margin = t.revenue !== 0 ? (t.profit / t.revenue) * 100 : 0;
+    lines.push(
+      [
+        idx + 1,
+        format(new Date(t.date), "yyyy-MM-dd"),
+        t.category,
+        t.department,
+        t.channel,
+        csvNumber(t.revenue, currency, exchangeRate),
+        csvNumber(t.expenses, currency, exchangeRate),
+        csvNumber(t.profit, currency, exchangeRate),
+        margin.toFixed(2),
+        t.budget === null ? "" : csvNumber(t.budget, currency, exchangeRate),
+      ]
+        .map(csvEscape)
+        .join(sep),
+    );
+  });
+  const avgMargin = sumRevenue !== 0 ? (sumProfit / sumRevenue) * 100 : 0;
+  lines.push(
+    [
+      "TOTAL KESELURUHAN",
+      "",
+      "",
+      "",
+      "",
+      csvNumber(sumRevenue, currency, exchangeRate),
+      csvNumber(sumExpenses, currency, exchangeRate),
+      csvNumber(sumProfit, currency, exchangeRate),
+      avgMargin.toFixed(2),
+      csvNumber(sumBudget, currency, exchangeRate),
+    ]
+      .map(csvEscape)
+      .join(sep),
+  );
+
+  const content = "\uFEFF" + lines.join(eol);
+  downloadTextFile(content, `finboard-laporan-${format(today, "yyyy-MM-dd")}.csv`, "text/csv;charset=utf-8;");
+}
+
+/** Ekspor CSV data mentah (M6.1): datar, siap diunggah ulang ke FinBoard. */
+function exportRawCsv(
+  txs: NormalizedTransaction[],
+  currency: "IDR" | "USD",
+  exchangeRate: number,
+): void {
+  const today = new Date();
+  const sep = ";";
+  const eol = "\r\n";
+  const lines: string[] = [];
+  lines.push("sep=;");
+  lines.push(["Tanggal", "Kategori", "Departemen", "Kanal Penjualan", "Revenue", "Expenses", "Profit", "Budget"].join(sep));
+  txs.forEach((t) => {
+    lines.push(
+      [
+        format(new Date(t.date), "yyyy-MM-dd"),
+        t.category,
+        t.department,
+        t.channel,
+        csvNumber(t.revenue, currency, exchangeRate),
+        csvNumber(t.expenses, currency, exchangeRate),
+        csvNumber(t.profit, currency, exchangeRate),
+        t.budget === null ? "" : csvNumber(t.budget, currency, exchangeRate),
+      ]
+        .map(csvEscape)
+        .join(sep),
+    );
+  });
+  const content = "\uFEFF" + lines.join(eol);
+  downloadTextFile(content, `finboard-data-${format(today, "yyyy-MM-dd")}.csv`, "text/csv;charset=utf-8;");
 }
 
 /** Input kurs IDR→USD (opsi 1). USD = IDR / kurs; tersimpan di localStorage via store. */
@@ -144,10 +288,57 @@ function ExchangeRateInput() {
 
 export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () => void }) {
   const router = useRouter();
-  const { dataset, filter, clearSession, currency, setCurrency, exchangeRate } = useFinBoardStore();
+  const { dataset, filter, clearSession, currency, setCurrency, exchangeRate, resetFilter } =
+    useFinBoardStore();
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  const filteredTxs = useMemo(() => {
+    if (!dataset) return [];
+    return applyFilter(dataset.transactions, filter);
+  }, [dataset, filter]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          target.isContentEditable
+        ) {
+          return;
+        }
+      }
+      if (event.key === "/") {
+        event.preventDefault();
+        const el = document.getElementById("transaction-search");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          (el as HTMLInputElement).focus();
+        }
+        return;
+      }
+      if (event.key === "r" || event.key === "R") {
+        const hasActiveFilter =
+          filter.categories.length > 0 ||
+          filter.departments.length > 0 ||
+          filter.channels.length > 0 ||
+          filter.dateRange.from !== null ||
+          filter.dateRange.to !== null;
+        if (hasActiveFilter) {
+          resetFilter();
+          toast.success("Filter direset");
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [filter, resetFilter]);
+
   if (!dataset) return null;
 
-  const filteredTxs = applyFilter(dataset.transactions, filter);
+  const filterDesc = describeFilter(filter);
 
   const handleCopy = async () => {
     try {
@@ -162,14 +353,25 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
     }
   };
 
-  const handleExport = () => {
+  const handleExportReport = () => {
     if (filteredTxs.length === 0) {
       toast.info("Tidak ada transaksi terfilter untuk diekspor.");
       return;
     }
-    downloadFilteredCsv(filteredTxs, `finboard-terfilter-${new Date().toISOString().slice(0, 10)}.csv`);
-    toast.success("CSV terfilter diunduh", {
-      description: `${filteredTxs.length} transaksi diekspor.`,
+    exportReportCsv(filteredTxs, dataset.fileName, currency, exchangeRate, filterDesc);
+    toast.success("Laporan CSV diunduh", {
+      description: `${filteredTxs.length} transaksi diekspor (template laporan).`,
+    });
+  };
+
+  const handleExportRaw = () => {
+    if (filteredTxs.length === 0) {
+      toast.info("Tidak ada transaksi terfilter untuk diekspor.");
+      return;
+    }
+    exportRawCsv(filteredTxs, currency, exchangeRate);
+    toast.success("Data mentah CSV diunduh", {
+      description: `${filteredTxs.length} transaksi siap diunggah ulang.`,
     });
   };
 
@@ -276,8 +478,7 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
           {/* Input kurs IDR→USD (opsi 1): hanya muncul saat mode USD aktif.
               Nominal USD = IDR / kurs; tanpa API, client-side penuh. */}
           {currency === "USD" && <ExchangeRateInput />}
-          {/* Menu Ekspor: gabungkan Salin Ringkasan + Ekspor CSV + Cetak PDF (UI Bagian 2)
-              agar header tetap ringkas 1 baris di tablet & mobile. */}
+          {/* Menu Ekspor: Salin Ringkasan + Cetak PDF + Ekspor CSV template laporan + data mentah (M6.1). */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="flex items-center gap-1.5">
@@ -286,7 +487,7 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
                 <ChevronDown className="h-3.5 w-3.5 opacity-60" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-56 p-1.5">
+            <PopoverContent align="end" className="w-64 p-1.5">
               <button
                 onClick={handleCopy}
                 className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer"
@@ -295,18 +496,25 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
                 Salin Ringkasan
               </button>
               <button
-                onClick={handleExport}
-                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer"
-              >
-                <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
-                Ekspor CSV
-              </button>
-              <button
                 onClick={() => window.print()}
                 className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer"
               >
                 <Printer className="h-4 w-4 text-muted-foreground" />
-                Cetak / Simpan PDF
+                Cetak PDF
+              </button>
+              <button
+                onClick={handleExportReport}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer"
+              >
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                Ekspor CSV (Template Laporan)
+              </button>
+              <button
+                onClick={handleExportRaw}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                Ekspor CSV (Data Mentah)
               </button>
             </PopoverContent>
           </Popover>
@@ -314,6 +522,80 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
             <Settings2 className="h-4 w-4" />
             <span className="hidden sm:inline">Atur Kolom</span>
           </Button>
+          {/* Panduan & Pintasan (M6.3). */}
+          <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Panduan singkat & pintasan keyboard"
+                title="Panduan singkat & pintasan keyboard"
+                className="h-9 w-9 p-0"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <HelpCircle className="h-5 w-5 text-primary" />
+                  Panduan Singkat &amp; Pintasan
+                </DialogTitle>
+                <DialogDescription>
+                  Ringkasan fitur utama FinBoard dan pintasan keyboard yang tersedia.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Fitur Utama
+                  </p>
+                  <ul className="space-y-1.5 text-sm text-foreground">
+                    <li className="flex gap-2">
+                      <span className="text-primary">•</span>
+                      <span>Klik batang/donat chart untuk memfilter data sesuai kategori terpilih.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-primary">•</span>
+                      <span>Tempel data langsung dari Excel/Sheets ke kolom input (copy-paste massal).</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-primary">•</span>
+                      <span>Simulator What-If: ubah asumsi (margin, biaya, dsb.) dan lihat dampaknya langsung.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-primary">•</span>
+                      <span>Matriks P&amp;L: Revenue, Expenses &amp; Profit dibandingkan antar dimensi.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-primary">•</span>
+                      <span>Drill-down anomali: klik sel aneh di tabel untuk melihat rincian transaksinya.</span>
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Keyboard className="h-3.5 w-3.5" />
+                    Pintasan Keyboard
+                  </p>
+                  <ul className="space-y-1.5 text-sm text-foreground">
+                    <li className="flex items-center gap-2">
+                      <kbd className="inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded border border-surface-border bg-slate-50 px-1.5 font-mono text-xs font-semibold text-foreground">
+                        /
+                      </kbd>
+                      <span>Fokus ke pencarian tabel transaksi.</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <kbd className="inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded border border-surface-border bg-slate-50 px-1.5 font-mono text-xs font-semibold text-foreground">
+                        R
+                      </kbd>
+                      <span>Reset semua filter aktif (chart, tanggal, dimensi).</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Button
             variant="outline"
             onClick={() => {

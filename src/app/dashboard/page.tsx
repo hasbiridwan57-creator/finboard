@@ -7,6 +7,8 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Inbox, FilterX } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { id } from "date-fns/locale";
 import { useFinBoardStore } from "@/store/finBoardStore";
 import { parseCsv } from "@/lib/csvParser";
 import { getRawCsv } from "@/lib/sessionCsv";
@@ -141,6 +143,37 @@ function DashboardContent() {
 
   return (
     <>
+      {/* Header laporan khusus cetak PDF (Gemini M6.2) — hanya muncul saat Cetak/Simpan PDF */}
+      <div className="hidden print:block mb-6 border-b-2 border-slate-900 pb-4">
+        <h1 className="text-xl font-bold text-slate-900">
+          LAPORAN ANALITIK KEUANGAN — FINBOARD
+        </h1>
+        <div className="mt-2 grid gap-1 text-xs text-slate-700">
+          <div>
+            <span className="font-medium">Sumber Data:</span> {ds.fileName}
+          </div>
+          <div>
+            <span className="font-medium">Tanggal Cetak:</span>{" "}
+            {format(new Date(), "dd MMM yyyy", { locale: id })}
+          </div>
+          <div>
+            <span className="font-medium">Mata Uang:</span>{" "}
+            {currency === "USD"
+              ? `USD (kurs 1 USD = ${formatCurrency(exchangeRate, "IDR", false)})`
+              : "IDR"}
+          </div>
+          <div>
+            <span className="font-medium">Filter Aktif:</span>{" "}
+            {filter.dateRange.from || filter.dateRange.to
+              ? `${filter.dateRange.from ? format(parseISO(filter.dateRange.from), "dd MMM yyyy", { locale: id }) : "…"} s.d. ${filter.dateRange.to ? format(parseISO(filter.dateRange.to), "dd MMM yyyy", { locale: id }) : "…"}`
+              : "Semua tanggal"}
+            {filter.categories.length > 0 && ` | Kategori: ${filter.categories.join(", ")}`}
+            {filter.departments.length > 0 && ` | Departemen: ${filter.departments.join(", ")}`}
+            {filter.channels.length > 0 && ` | Kanal: ${filter.channels.join(", ")}`}
+          </div>
+        </div>
+      </div>
+
       <DashboardHeader onOpenMapping={() => setMappingOpen(true)} />
       <GlobalFilterBar />
 
