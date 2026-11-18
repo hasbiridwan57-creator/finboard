@@ -38,11 +38,18 @@ export function parseCsv(
   fileName: string,
   options: ParseOptions = {},
 ): ParsedDataset {
+  // Bersihkan BOM & directive `sep=` di baris pertama (Excel/Sheets kompatibilitas).
+  text = text.replace(/^\uFEFF/, "");
+  const sepMatch = /^sep=[;,]\s*(\r?\n|\r|$)/i.exec(text);
+  if (sepMatch) {
+    text = text.slice(sepMatch[0].length);
+  }
+
   const result = Papa.parse<Record<string, string>>(text, {
     header: true,
     skipEmptyLines: "greedy",
     dynamicTyping: false,
-    transformHeader: (h) => h.trim(),
+    transformHeader: (h) => h.replace(/^\uFEFF/, "").trim(),
   });
 
   const headers = (result.meta.fields || []).filter(Boolean);

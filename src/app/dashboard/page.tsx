@@ -4,10 +4,12 @@
  * Halaman Dashboard — merangkai seluruh modul (F2–F5).
  * Single source of truth: useFinBoardStore. Filter global → semua ikut berubah.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Inbox, FilterX } from "lucide-react";
 import { useFinBoardStore } from "@/store/finBoardStore";
+import { parseCsv } from "@/lib/csvParser";
+import { getRawCsv } from "@/lib/sessionCsv";
 import { Button } from "@/components/ui/button";
 import {
   useFiltered,
@@ -36,7 +38,24 @@ import ManualMappingModal from "@/components/ManualMappingModal";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { dataset } = useFinBoardStore();
+  const { dataset, setDataset } = useFinBoardStore();
+
+  // Auto-restore dari sessionStorage (Gemini M1.3): sekali percobaan per-mount,
+  // di dalam useEffect (bukan saat render) agar tidak memutasi store saat render.
+  const hasTriedRestore = useRef(false);
+  useEffect(() => {
+    if (hasTriedRestore.current) return;
+    hasTriedRestore.current = true;
+    try {
+      const raw = getRawCsv();
+      if (raw) {
+        const restored = parseCsv(raw.text, raw.fileName);
+        setDataset(restored);
+      }
+    } catch {
+      /* data korup / parsing gagal → biarkan UploadView tampil */
+    }
+  }, [setDataset]);
 
   // Belum ada data → kembali ke upload
   if (!dataset) {
@@ -58,7 +77,7 @@ export default function DashboardPage() {
 }
 
 function DashboardContent() {
-  const { dataset, filter, needsManualMapping, setNeedsManualMapping, currency, resetFilter } =
+  const { dataset, filter, needsManualMapping, setNeedsManualMapping, currency, exchangeRate, resetFilter } =
     useFinBoardStore();
   const [mappingOpen, setMappingOpen] = useState(false);
   const ds = dataset!;
@@ -77,7 +96,7 @@ function DashboardContent() {
   const categoryData = useMemo(() => aggregateByDimension2(filtered, "category"), [filtered]);
   const deptData = useMemo(() => aggregateByDimension2(filtered, "department"), [filtered]);
   const channelData = useMemo(() => aggregateByDimension2(filtered, "channel"), [filtered]);
-  const insights = useMemo(() => generateInsights(filtered, currency), [filtered, currency]);
+  const insights = useMemo(() => generateInsights(filtered, currency, exchangeRate), [filtered, currency, exchangeRate]);
 
   // Sub-metrik kontekstual untuk tiap KPI (audit UI Bagian 4).
   const avgPerTx = filtered.length > 0 ? kpi.totalRevenue / filtered.length : 0;

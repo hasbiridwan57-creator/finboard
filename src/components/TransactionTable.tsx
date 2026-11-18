@@ -27,23 +27,53 @@ import type { CurrencyMode } from "@/store/finBoardStore";
  * Pencarian angka toleran terhadap pemisah: input "15.000.000", "15000000",
  * atau "15,000,000" semuanya dinormalisasi lalu dicocokkan ke nilai sel.
  */
-function matchGlobalFilter(
-  row: Row<NormalizedTransaction>,
-  _columnId: string,
-  filterValue: unknown,
-): boolean {
-  const q = String(filterValue ?? "").trim().toLowerCase();
-  if (!q) return true;
-  const t = row.original;
-  const textHay = [t.date, t.category, t.department, t.channel].join(" ").toLowerCase();
-  if (textHay.includes(q)) return true;
-  // Normalisasi query angka → bandingkan dengan nilai numerik tiap sel keuangan.
-  const qNum = parseFinancialNumber(q);
-  if (qNum !== null) {
+function makeMatchGlobalFilter(exchangeRate: number) {
+  return function matchGlobalFilter(
+    row: Row<NormalizedTransaction>,
+    _columnId: string,
+    filterValue: unknown,
+  ): boolean {
+    const q = String(filterValue ?? "").trim().toLowerCase();
+    if (!q) return true;
+    const t = row.original;
+    const textHay = [t.date, t.category, t.department, t.channel].join(" ").toLowerCase();
+    if (textHay.includes(q)) return true;
+    // Normalisasi query angka → bandingkan dengan nilai numerik tiap sel keuangan (IDR).
+    const qNum = parseFinancialNumber(q);
     const cells = [t.revenue, t.expenses, t.profit, t.budget];
-    if (cells.some((v) => v !== null && Math.abs(v - qNum) < 1)) return true;
-  }
-  return false;
+
+    // 1) Cocokkan sebagai IDR mentah (perilaku lama).
+    if (qNum !== null) {
+      if (cells.some((v) => v !== null && Math.abs(v - qNum) < 1)) return true;
+    }
+
+    // 2) Cabang USD terkonversi: jika query mengandung "$" atau menyerupai angka
+    //    desimal US (contoh: $63, 63, $63.42, 63.42), cocokkan terhadap nilai
+    //    IDR yang sudah dikonversi ke USD (value / exchangeRate).
+    const looksUsd = q.includes("$") || /^\$?\d{1,3}(,\d{3})*(\.\d+)?$|^\$?\d+(\.\d+)?$/.test(q);
+    if (looksUsd && typeof qNum === "number" && exchangeRate > 0) {
+      const qRound = String(Math.round(qNum));
+      const qFixed = qNum.toFixed(2);
+      const qFixedTrim = qNum.toFixed(2).replace(/\.00$/, "");
+      for (const v of cells) {
+        if (v === null) continue;
+        const usd = v / exchangeRate;
+        const usdRound = String(Math.round(usd));
+        const usdFixed = usd.toFixed(2);
+        const usdFixedTrim = usd.toFixed(2).replace(/\.00$/, "");
+        if (
+          usdRound === qRound ||
+          usdFixed === qFixed ||
+          usdFixedTrim === qFixedTrim ||
+          usdFixedTrim === qRound
+        ) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
 }
 interface Props {
   data: NormalizedTransaction[];
@@ -59,7 +89,7 @@ function MoneyCell({ value, currency }: { value: number; currency: CurrencyMode 
 }
 
 export default function TransactionTable({ data, hasBudget }: Props) {
-  const { currency } = useFinBoardStore();
+  const { currency, exchangeRate } = useFinBoardStore();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [debouncedFilter, setDebouncedFilter] = useState("");
@@ -135,6 +165,11 @@ export default function TransactionTable({ data, hasBudget }: Props) {
     }
     return cols;
   }, [hasBudget, currency]);
+
+  const matchGlobalFilter = useMemo(
+    () => makeMatchGlobalFilter(exchangeRate),
+    [exchangeRate],
+  );
 
   const table = useReactTable({
     data,

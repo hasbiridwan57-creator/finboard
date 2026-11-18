@@ -17,10 +17,11 @@ export interface Insight {
 export function generateInsights(
   txs: NormalizedTransaction[],
   currency: CurrencyMode = "IDR",
+  exchangeRate = 1,
 ): Insight[] {
   if (txs.length === 0) return [];
   const insights: Insight[] = [];
-  const money = (v: number) => formatCurrency(v, currency);
+  const money = (v: number) => formatCurrency(v, currency, true, exchangeRate);
   const kpi = computeKpi(txs);
   const months = aggregateMonthly(txs);
 

@@ -35,10 +35,17 @@ interface Preset {
 }
 
 const PRESETS: Preset[] = [
-  { label: "Semua Waktu", compute: (min, max) => ({ from: min, to: max }) },
+  {
+    label: "Semua Waktu",
+    compute: (min, max) => {
+      if (!min || !max) return null;
+      return { from: min, to: max };
+    },
+  },
   {
     label: "30 Hari Terakhir",
-    compute: (_min, max) => {
+    compute: (min, max) => {
+      if (!min || !max) return null;
       const d = new Date(max);
       d.setUTCDate(d.getUTCDate() - 29);
       return { from: d.toISOString().slice(0, 10), to: max };
@@ -46,7 +53,8 @@ const PRESETS: Preset[] = [
   },
   {
     label: "Kuartal Terakhir",
-    compute: (_min, max) => {
+    compute: (min, max) => {
+      if (!min || !max) return null;
       const d = new Date(max);
       d.setUTCMonth(d.getUTCMonth() - 2);
       d.setUTCDate(1);
@@ -56,6 +64,7 @@ const PRESETS: Preset[] = [
   {
     label: "YTD",
     compute: (min, max) => {
+      if (!min || !max) return null;
       const y = max.slice(0, 4);
       const from = `${y}-01-01`;
       return { from: from < min ? min : from, to: max };
@@ -107,7 +116,7 @@ function DateRangeControl({ min, max }: { min: string; max: string }) {
             type="date"
             value={from}
             min={min}
-            max={max}
+            max={to}
             onChange={(e) => setFilter({ dateRange: { ...filter.dateRange, from: e.target.value } })}
             className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm tabular-nums focus:outline focus:outline-2 focus:outline-ring"
           />
@@ -115,7 +124,7 @@ function DateRangeControl({ min, max }: { min: string; max: string }) {
           <input
             type="date"
             value={to}
-            min={min}
+            min={from}
             max={max}
             onChange={(e) => setFilter({ dateRange: { ...filter.dateRange, to: e.target.value } })}
             className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm tabular-nums focus:outline focus:outline-2 focus:outline-ring"
@@ -254,7 +263,7 @@ export default function GlobalFilterBar() {
   }
 
   return (
-    <div className="sticky top-[57px] z-30 border-b border-surface-border bg-background/95 backdrop-blur">
+    <div className="z-30 border-b border-surface-border bg-background/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
         <DateRangeControl min={min} max={max} />

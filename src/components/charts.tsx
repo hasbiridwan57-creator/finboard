@@ -1,7 +1,7 @@
 "use client";
 
 /** Kumpulan 5 chart interaktif (PRD FR-CHR) + granularitas & switcher metrik (UI Bagian 5). */
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -151,6 +151,9 @@ export function RevenueExpenseChart({
 }) {
   const currency = useCurrency();
   const [gran, setGran] = useState<Granularity>(defaultGranularity);
+  useEffect(() => {
+    setGran(defaultGranularity);
+  }, [defaultGranularity]);
   const data = gran === "daily" ? daily : gran === "weekly" ? weekly : monthly;
 
   const control = (
@@ -293,9 +296,12 @@ export function CategoryProfitChart({ data }: { data: DimensionMetricPoint[] }) 
   const active = filter.categories;
   const { control, pick, metricName } = useMetricSwitch();
 
-  const values = data.map((d) => pick(d));
-  const total = values.reduce((s, v) => s + v, 0);
+  const sorted = useMemo(() => [...data].sort((a, b) => pick(b) - pick(a)), [data, pick]);
   const showDonut = data.length > 6;
+  // Mode Donut: hanya item value > 0, agar persentase tidak terdistorsi nilai ≤ 0.
+  const donutData = sorted.filter((d) => pick(d) > 0);
+  const donutTotal = donutData.reduce((s, d) => s + pick(d), 0);
+  const hiddenDeficit = sorted.filter((d) => pick(d) <= 0);
 
   /** Toggle kategori aktif saat batang/kupon diklik (B3). */
   const toggle = (name: string) => {
@@ -305,8 +311,9 @@ export function CategoryProfitChart({ data }: { data: DimensionMetricPoint[] }) 
     setFilter({ categories: next });
   };
 
-  // Bentuk data sesuai metrik aktif
-  const chartData = data.map((d) => ({ name: d.name, value: pick(d) }));
+  // Bentuk data sesuai metrik aktif (sudah terurut menurun).
+  const chartData = sorted.map((d) => ({ name: d.name, value: pick(d) }));
+  const donutChartData = donutData.map((d) => ({ name: d.name, value: pick(d) }));
 
   if (data.length === 0) return <ChartCard title="Per Kategori" control={control}><EmptyChart msg="Kolom kategori tidak tersedia." /></ChartCard>;
 
@@ -322,9 +329,20 @@ export function CategoryProfitChart({ data }: { data: DimensionMetricPoint[] }) 
     />
   ) : undefined;
 
+  const deficitBadge =
+    chartType === "donut" && showDonut && hiddenDeficit.length > 0 ? (
+      <span
+        title={`Kategori ${metricName} ≤ 0 (tak tampil di donut): ${hiddenDeficit.map((d) => d.name).join(", ")}`}
+        className="rounded-full border border-danger-border bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger"
+      >
+        {hiddenDeficit.length} kategori defisit disembunyikan
+      </span>
+    ) : undefined;
+
   return (
     <ChartCard
       title={`Per Kategori — ${metricName}`}
+      badge={deficitBadge}
       note={<FilterHint active={active} />}
       control={
         <div className="flex flex-wrap items-center gap-2">
@@ -337,7 +355,7 @@ export function CategoryProfitChart({ data }: { data: DimensionMetricPoint[] }) 
         {chartType === "donut" && showDonut ? (
           <PieChart>
             <Pie
-              data={chartData}
+              data={donutChartData}
               dataKey="value"
               nameKey="name"
               innerRadius="55%"
@@ -346,11 +364,11 @@ export function CategoryProfitChart({ data }: { data: DimensionMetricPoint[] }) 
               onClick={(entry: { name?: string }) => entry?.name && toggle(entry.name)}
               style={{ cursor: "pointer" }}
             >
-              {chartData.map((d, i) => (
+              {donutChartData.map((d, i) => (
                 <Cell key={i} fill={d.value >= 0 ? CHART_COLORS[i % CHART_COLORS.length] : "#dc2626"} opacity={active.length === 0 || active.includes(d.name) ? 1 : 0.35} />
               ))}
             </Pie>
-            <Tooltip content={<ChartTooltip valueFormatter={(v) => `${formatCurrency(v, currency)} (${formatPercent((v / total) * 100)})`} />} />
+            <Tooltip content={<ChartTooltip valueFormatter={(v) => `${formatCurrency(v, currency)} (${formatPercent((v / donutTotal) * 100)})`} />} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
           </PieChart>
         ) : (
@@ -400,7 +418,8 @@ export function DepartmentProfitChart({ data }: { data: DimensionMetricPoint[] }
     setFilter({ departments: next });
   };
 
-  const chartData = data.map((d) => ({ name: d.name, value: pick(d) }));
+  const sorted = useMemo(() => [...data].sort((a, b) => pick(b) - pick(a)), [data, pick]);
+  const chartData = sorted.map((d) => ({ name: d.name, value: pick(d) }));
 
   if (data.length === 0) return <ChartCard title="Per Departemen" control={control}><EmptyChart msg="Kolom departemen tidak tersedia." /></ChartCard>;
   return (

@@ -181,12 +181,14 @@ export function formatCurrency(
   value: number,
   mode: "IDR" | "USD",
   compact = true,
+  /** Kurs eksplisit (opsional). Jika diabaikan, dibaca dari store. Memungkinkan reaktivitas hook. */
+  rate?: number,
 ): string {
   if (mode === "IDR") return formatRupiah(value, compact);
 
-  // Mode USD: konversi IDR → USD memakai kurs terkini dari store.
-  const rate = getExchangeRate();
-  const converted = rate > 0 ? value / rate : value;
+  // Mode USD: konversi IDR → USD memakai kurs terkini (param eksplisit atau dari store).
+  const r = rate ?? getExchangeRate();
+  const converted = r > 0 ? value / r : value;
 
   const abs = Math.abs(converted);
   const sign = converted < 0 ? "-" : "";

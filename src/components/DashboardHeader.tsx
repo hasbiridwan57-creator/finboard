@@ -30,9 +30,10 @@ async function copySummary(
   txs: NormalizedTransaction[],
   fileName: string,
   currency: "IDR" | "USD",
+  exchangeRate: number,
 ): Promise<void> {
   const kpi = computeKpi(txs);
-  const insights = generateInsights(txs);
+  const insights = generateInsights(txs, currency, exchangeRate);
   const lines = [
     `Ringkasan FinBoard — ${fileName}`,
     "",
@@ -126,7 +127,7 @@ function ExchangeRateInput() {
 
 export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () => void }) {
   const router = useRouter();
-  const { dataset, filter, clearSession, currency, setCurrency } = useFinBoardStore();
+  const { dataset, filter, clearSession, currency, setCurrency, exchangeRate } = useFinBoardStore();
   if (!dataset) return null;
 
   const cleanedRows = dataset.invalidDateRows + dataset.cleanedNumericCells;
@@ -134,7 +135,7 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
 
   const handleCopy = async () => {
     try {
-      await copySummary(filteredTxs, dataset.fileName, currency);
+      await copySummary(filteredTxs, dataset.fileName, currency, exchangeRate);
       toast.success("Ringkasan disalin ke clipboard", {
         description: "Angka KPI + poin insight siap ditempel ke laporan.",
       });

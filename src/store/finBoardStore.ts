@@ -5,6 +5,7 @@
  */
 import { create } from "zustand";
 import type { ColumnMapping, GlobalFilterState, ParsedDataset } from "@/lib/types";
+import { clearRawCsv } from "@/lib/sessionCsv";
 
 /** Mode tampilan mata uang (PRD/audit Bagian B4). */
 export type CurrencyMode = "IDR" | "USD";
@@ -88,6 +89,7 @@ export const useFinBoardStore = create<FinBoardState>((set) => ({
 
   clearSession: () => {
     set({ dataset: null, filter: emptyFilter, needsManualMapping: false });
+    clearRawCsv();
     try {
       localStorage.removeItem("finboard.meta");
     } catch {
