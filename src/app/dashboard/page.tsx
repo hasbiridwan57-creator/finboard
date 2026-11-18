@@ -34,6 +34,8 @@ import {
 } from "@/components/charts";
 import InsightsPanel from "@/components/InsightsPanel";
 import MonthlyPnLTable from "@/components/MonthlyPnLTable";
+import WhatIfSimulator from "@/components/WhatIfSimulator";
+import { SegmentParetoCard } from "@/components/SegmentParetoCard";
 import TransactionTable from "@/components/TransactionTable";
 import ManualMappingModal from "@/components/ManualMappingModal";
 
@@ -220,6 +222,12 @@ function DashboardContent() {
 
         {/* Monthly P&L Statement (FP&A style, collapsible) */}
         <MonthlyPnLTable monthly={monthly} hasBudget={budgetAvailable} />
+
+        {/* Modul FP&A: What-If Simulator + Analisis Pareto 80/20 (Gemini M4) */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <WhatIfSimulator kpi={kpi} />
+          <SegmentParetoCard txs={filtered} />
+        </div>
 
         {/* Insights */}
         <InsightsPanel insights={insights} />
