@@ -189,28 +189,6 @@ export function aggregateByDimension2(
   return top;
 }
 
-/** Agregasi profit per dimensi, diurutkan menurun, dengan Top-N + Lainnya (PRD §13). */
-export function aggregateByDimension(
-  txs: NormalizedTransaction[],
-  key: "category" | "department" | "channel",
-  topN = 7,
-): DimensionPoint[] {
-  const map = new Map<string, number>();
-  for (const t of txs) {
-    map.set(t[key], (map.get(t[key]) ?? 0) + t.profit);
-  }
-  const arr = Array.from(map.entries())
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
-
-  if (arr.length <= topN) return arr;
-
-  const top = arr.slice(0, topN);
-  const others = arr.slice(topN).reduce((s, d) => s + d.value, 0);
-  top.push({ name: "Lainnya", value: others });
-  return top;
-}
-
 /** Nilai unik untuk opsi filter (dari dataset penuh). */
 export function uniqueValues(
   txs: NormalizedTransaction[],

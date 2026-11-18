@@ -4,7 +4,8 @@
  * Tooltip chart bersih & konsisten (PRD FR-CHR-03).
  * Tipe props didefinisikan manual agar stabil lintas versi Recharts.
  */
-import { formatRupiah } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
+import { useFinBoardStore } from "@/store/finBoardStore";
 
 export interface TooltipEntry {
   name?: string | number;
@@ -21,9 +22,11 @@ interface Props {
 }
 
 export default function ChartTooltip({ active, payload, label, valueFormatter }: Props) {
+  const { currency } = useFinBoardStore();
   if (!active || !payload || payload.length === 0) return null;
 
-  const fmt = valueFormatter ?? ((v: number) => formatRupiah(v));
+  // Default: ikut mode mata uang global (IDR/USD), agar konsisten dengan chart lain.
+  const fmt = valueFormatter ?? ((v: number) => formatCurrency(v, currency));
 
   return (
     <div className="rounded-lg border border-surface-border bg-white px-3 py-2 shadow-lg">
