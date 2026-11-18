@@ -36,7 +36,7 @@ function makeMatchGlobalFilter(exchangeRate: number) {
     const q = String(filterValue ?? "").trim().toLowerCase();
     if (!q) return true;
     const t = row.original;
-    const textHay = [t.date, t.category, t.department, t.channel].join(" ").toLowerCase();
+    const textHay = [t.id, t.date, t.category, t.department, t.channel].join(" ").toLowerCase();
     if (textHay.includes(q)) return true;
     // Normalisasi query angka → bandingkan dengan nilai numerik tiap sel keuangan (IDR).
     const qNum = parseFinancialNumber(q);
@@ -78,6 +78,8 @@ function makeMatchGlobalFilter(exchangeRate: number) {
 interface Props {
   data: NormalizedTransaction[];
   hasBudget: boolean;
+  /** Kontrol pencarian global dari luar (drill-down anomali). Jika tidak dikirim, pakai state internal. */
+  externalSearch?: string;
 }
 
 function MoneyCell({ value, currency }: { value: number; currency: CurrencyMode }) {
@@ -88,17 +90,18 @@ function MoneyCell({ value, currency }: { value: number; currency: CurrencyMode 
   );
 }
 
-export default function TransactionTable({ data, hasBudget }: Props) {
+export default function TransactionTable({ data, hasBudget, externalSearch }: Props) {
   const { currency, exchangeRate } = useFinBoardStore();
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
-  const [debouncedFilter, setDebouncedFilter] = useState("");
+  const [internalFilter, setInternalFilter] = useState("");
+  const search = externalSearch !== undefined ? externalSearch : internalFilter;
+  const [debouncedFilter, setDebouncedFilter] = useState(search);
 
   // debounce 200ms (PRD FR-TBL-03)
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedFilter(globalFilter), 200);
+    const t = setTimeout(() => setDebouncedFilter(search), 200);
     return () => clearTimeout(t);
-  }, [globalFilter]);
+  }, [search]);
 
   const columns = useMemo<ColumnDef<NormalizedTransaction>[]>(() => {
     const cols: ColumnDef<NormalizedTransaction>[] = [
@@ -185,22 +188,23 @@ export default function TransactionTable({ data, hasBudget }: Props) {
   });
 
   return (
-    <div className="rounded-xl border border-surface-border bg-white shadow-card">
+    <div id="transaction-table" className="rounded-xl border border-surface-border bg-white shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border px-5 py-4">
         <h3 className="text-sm font-semibold text-foreground">Data Transaksi Terfilter</h3>
         <div className="no-print flex items-center gap-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
+              id="transaction-search"
+              value={search}
+              onChange={(e) => setInternalFilter(e.target.value)}
               placeholder="Cari transaksi…"
               className="w-48 rounded-lg border border-surface-border py-2 pl-8 pr-8 text-sm focus:outline focus:outline-2 focus:outline-primary sm:w-64"
             />
-            {globalFilter && (
+            {search && (
               <button
                 onClick={() => {
-                  setGlobalFilter("");
+                  setInternalFilter("");
                   setDebouncedFilter("");
                 }}
                 aria-label="Hapus pencarian"

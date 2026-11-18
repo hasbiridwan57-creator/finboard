@@ -4,7 +4,7 @@
  * Halaman Dashboard — merangkai seluruh modul (F2–F5).
  * Single source of truth: useFinBoardStore. Filter global → semua ikut berubah.
  */
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Inbox, FilterX } from "lucide-react";
 import { useFinBoardStore } from "@/store/finBoardStore";
@@ -20,7 +20,8 @@ import {
   hasBudget,
 } from "@/lib/chartAggregator";
 import { computeKpi, computeDeltas } from "@/lib/kpiCalculator";
-import { generateInsights } from "@/lib/insightGenerator";
+import { generateInsights, detectAnomalies } from "@/lib/insightGenerator";
+import type { NormalizedTransaction } from "@/lib/types";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import DashboardHeader from "@/components/DashboardHeader";
 import GlobalFilterBar from "@/components/GlobalFilterBar";
@@ -36,6 +37,7 @@ import InsightsPanel from "@/components/InsightsPanel";
 import MonthlyPnLTable from "@/components/MonthlyPnLTable";
 import WhatIfSimulator from "@/components/WhatIfSimulator";
 import { SegmentParetoCard } from "@/components/SegmentParetoCard";
+import AnomalyHighlights from "@/components/AnomalyHighlights";
 import TransactionTable from "@/components/TransactionTable";
 import ManualMappingModal from "@/components/ManualMappingModal";
 
@@ -83,6 +85,7 @@ function DashboardContent() {
   const { dataset, filter, needsManualMapping, setNeedsManualMapping, currency, exchangeRate, resetFilter } =
     useFinBoardStore();
   const [mappingOpen, setMappingOpen] = useState(false);
+  const [tableSearch, setTableSearch] = useState("");
   const ds = dataset!;
   const allTxs = ds.transactions;
 
@@ -91,6 +94,18 @@ function DashboardContent() {
   // Semua derivasi berat dibungkus useMemo agar hanya dihitung ulang saat
   // data/filter benar-benar berubah (PRD §9 performa re-render <250ms).
   const kpi = useMemo(() => computeKpi(filtered), [filtered]);
+  const anomalies = useMemo(() => detectAnomalies(filtered), [filtered]);
+
+  // Drill-down anomali (Gemini M5.2.d): isi pencarian tabel + smooth scroll.
+  const handleInspectAnomaly = useCallback((tx: NormalizedTransaction) => {
+    setTableSearch(tx.id);
+    // debounce tabel 200ms; tunggu sedikit lalu scroll agar baris sudah tersaring.
+    setTimeout(() => {
+      document
+        .getElementById("transaction-table")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 250);
+  }, []);
   const deltas = useMemo(() => computeDeltas(filtered, filter, allTxs), [filtered, filter, allTxs]);
   const monthly = useMemo(() => aggregateMonthly(filtered), [filtered]);
   const daily = useMemo(() => aggregateDaily(filtered), [filtered]);
@@ -229,11 +244,18 @@ function DashboardContent() {
           <SegmentParetoCard txs={filtered} />
         </div>
 
-        {/* Insights */}
-        <InsightsPanel insights={insights} />
+        {/* Insights + Deteksi Anomali (Gemini M5.2): berdampingan */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <InsightsPanel insights={insights} />
+          <AnomalyHighlights anomalies={anomalies} onInspect={handleInspectAnomaly} />
+        </div>
 
         {/* Table */}
-        <TransactionTable data={filtered} hasBudget={budgetAvailable} />
+        <TransactionTable
+          data={filtered}
+          hasBudget={budgetAvailable}
+          externalSearch={tableSearch}
+        />
           </>
         )}
       </main>

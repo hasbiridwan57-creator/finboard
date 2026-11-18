@@ -18,6 +18,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  ReferenceLine,
 } from "recharts";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import type { MonthlyPoint, DimensionMetricPoint, Granularity } from "@/lib/chartAggregator";
@@ -151,22 +152,58 @@ export function RevenueExpenseChart({
 }) {
   const currency = useCurrency();
   const [gran, setGran] = useState<Granularity>(defaultGranularity);
+  const [mode, setMode] = useState<"periodik" | "kumulatif">("periodik");
   useEffect(() => {
     setGran(defaultGranularity);
   }, [defaultGranularity]);
   const data = gran === "daily" ? daily : gran === "weekly" ? weekly : monthly;
 
+  /** Transformasi kumulatif: running sum revenue/expenses, profit = selisih kumulatif. */
+  const displayData = useMemo(() => {
+    if (mode === "periodik") return data;
+    const sorted = [...data].sort((a, b) => {
+      const aKey = a.monthKey ?? "";
+      const bKey = b.monthKey ?? "";
+      return aKey < bKey ? -1 : aKey > bKey ? 1 : 0;
+    });
+    let sumRev = 0;
+    let sumExp = 0;
+    return sorted.map((d) => {
+      sumRev += d.revenue;
+      sumExp += d.expenses;
+      return { ...d, revenue: sumRev, expenses: sumExp, profit: sumRev - sumExp };
+    });
+  }, [data, mode]);
+
+  /** Rata-rata metric aktif (revenue) dari data yang sedang tampil. */
+  const avgRevenue = useMemo(() => {
+    if (displayData.length === 0) return 0;
+    const total = displayData.reduce((acc, d) => acc + (d.revenue ?? 0), 0);
+    return total / displayData.length;
+  }, [displayData]);
+
   const control = (
-    <Segmented<Granularity>
-      options={[
-        { value: "daily", label: "Harian" },
-        { value: "weekly", label: "Mingguan" },
-        { value: "monthly", label: "Bulanan" },
-      ]}
-      value={gran}
-      onChange={setGran}
-      ariaLabel="Granularitas tren"
-    />
+    <div className="flex flex-wrap items-center gap-2">
+      <Segmented<"periodik" | "kumulatif">
+        options={[
+          { value: "periodik", label: "Periodik" },
+          { value: "kumulatif", label: "Kumulatif" },
+        ]}
+        value={mode}
+        onChange={setMode}
+        ariaLabel="Mode tampilan tren"
+      />
+      <Segmented<Granularity>
+        options={[
+          { value: "daily", label: "Harian" },
+          { value: "weekly", label: "Mingguan" },
+          { value: "monthly", label: "Bulanan" },
+        ]}
+        value={gran}
+        onChange={setGran}
+        ariaLabel="Granularitas tren"
+      />
+    </div>
   );
 
   if (data.length === 0)
@@ -179,7 +216,7 @@ export function RevenueExpenseChart({
   return (
     <ChartCard title="Tren Revenue vs Expenses" control={control}>
       <ResponsiveContainer width="100%" height={280}>
-        <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+        <AreaChart data={displayData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#2563eb" stopOpacity={0.25} />
@@ -199,6 +236,20 @@ export function RevenueExpenseChart({
           <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#dc2626" strokeWidth={2} fill="url(#expGrad)" />
           {/* Garis ketiga hijau: Profit (UI Bagian 5) */}
           <Line type="monotone" dataKey="profit" name="Profit" stroke="#16a34a" strokeWidth={2} dot={false} />
+          {/* Garis rata-rata Revenue (M5.1): putus-putus abu dengan label kecil. */}
+          {displayData.length > 0 && (
+            <ReferenceLine
+              y={avgRevenue}
+              stroke="#94A3B8"
+              strokeDasharray="5 5"
+              label={{
+                value: "Rata-rata",
+                position: "insideTopRight",
+                fontSize: 10,
+                fill: "#64748b",
+              }}
+            />
+          )}
         </AreaChart>
       </ResponsiveContainer>
     </ChartCard>

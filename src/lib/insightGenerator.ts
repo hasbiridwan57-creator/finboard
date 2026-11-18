@@ -8,6 +8,85 @@ import { computeKpi } from "./kpiCalculator";
 import { formatCurrency, formatPercent } from "./format";
 import type { CurrencyMode } from "@/store/finBoardStore";
 
+/** Satu anomali transaksional yang terdeteksi dari data terfilter. */
+export interface Anomaly {
+  tx: NormalizedTransaction;
+  kind: "loss" | "revenue_spike" | "cost_ratio";
+  label: string;
+  severity: string;
+  score: number;
+}
+
+const LABELS: Record<Anomaly["kind"], string> = {
+  loss: "Kerugian besar",
+  revenue_spike: "Lonjakan pendapatan",
+  cost_ratio: "Biaya melampaui pendapatan",
+};
+
+/**
+ * Deteksi maksimal 4 transaksi outlier paling signifikan dari data terfilter.
+ * Deterministik: kandidat diurutkan (score desc, lalu tx.id asc) lalu di-slice 4.
+ * Satu tx hanya muncul sekali (dedup by id, prioritas severity & score tertinggi).
+ */
+export function detectAnomalies(txs: NormalizedTransaction[]): Anomaly[] {
+  if (txs.length === 0) return [];
+  const avgRevenue = txs.reduce((s, t) => s + t.revenue, 0) / txs.length;
+
+  const candidates: Anomaly[] = [];
+  for (const tx of txs) {
+    if (tx.profit < 0) {
+      candidates.push({
+        tx,
+        kind: "loss",
+        label: LABELS.loss,
+        severity: "tinggi",
+        score: Math.abs(tx.profit),
+      });
+    }
+    if (avgRevenue > 0 && tx.revenue > 2.2 * avgRevenue) {
+      candidates.push({
+        tx,
+        kind: "revenue_spike",
+        label: LABELS.revenue_spike,
+        severity: "signifikan",
+        score: tx.revenue,
+      });
+    }
+    if (tx.expenses > tx.revenue) {
+      candidates.push({
+        tx,
+        kind: "cost_ratio",
+        label: LABELS.cost_ratio,
+        severity: "perhatian",
+        score: tx.expenses - tx.revenue,
+      });
+    }
+  }
+
+  // Dedup by tx.id — prioritaskan score tertinggi, lalu urutan kind untuk tie-break.
+  const kindPriority: Record<Anomaly["kind"], number> = {
+    loss: 0,
+    cost_ratio: 1,
+    revenue_spike: 2,
+  };
+  const byId = new Map<string, Anomaly>();
+  for (const c of candidates) {
+    const existing = byId.get(c.tx.id);
+    if (
+      !existing ||
+      c.score > existing.score ||
+      (c.score === existing.score &&
+        kindPriority[c.kind] < kindPriority[existing.kind])
+    ) {
+      byId.set(c.tx.id, c);
+    }
+  }
+
+  return Array.from(byId.values())
+    .sort((a, b) => b.score - a.score || a.tx.id.localeCompare(b.tx.id))
+    .slice(0, 4);
+}
+
 export interface Insight {
   text: string;
   /** "info" | "positive" | "warning" — untuk pewarnaan opsional */
