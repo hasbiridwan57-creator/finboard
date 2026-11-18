@@ -8,13 +8,16 @@ import {
   ClipboardCopy,
   Download,
   FileSpreadsheet,
+  Printer,
   RefreshCw,
   Settings2,
   Table2,
   TriangleAlert,
+  ChevronDown,
 } from "lucide-react";
 import { useFinBoardStore } from "@/store/finBoardStore";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { computeKpi } from "@/lib/kpiCalculator";
 import { applyFilter } from "@/lib/chartAggregator";
 import { formatCurrency, formatPercent } from "@/lib/format";
@@ -152,15 +155,40 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
               </Button>
             ))}
           </div>
-          {/* Ekspor laporan cepat (B2). */}
-          <Button variant="outline" onClick={handleCopy} className="flex items-center gap-1.5">
-            <ClipboardCopy className="h-4 w-4" />
-            <span className="hidden sm:inline">Salin Ringkasan</span>
-          </Button>
-          <Button variant="outline" onClick={handleExport} className="flex items-center gap-1.5">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Ekspor CSV</span>
-          </Button>
+          {/* Menu Ekspor: gabungkan Salin Ringkasan + Ekspor CSV + Cetak PDF (UI Bagian 2)
+              agar header tetap ringkas 1 baris di tablet & mobile. */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-1.5">
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Ekspor</span>
+                <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 p-1.5">
+              <button
+                onClick={handleCopy}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer"
+              >
+                <ClipboardCopy className="h-4 w-4 text-muted-foreground" />
+                Salin Ringkasan
+              </button>
+              <button
+                onClick={handleExport}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                Ekspor CSV
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer"
+              >
+                <Printer className="h-4 w-4 text-muted-foreground" />
+                Cetak / Simpan PDF
+              </button>
+            </PopoverContent>
+          </Popover>
           <Button variant="outline" onClick={onOpenMapping} className="flex items-center gap-1.5">
             <Settings2 className="h-4 w-4" />
             <span className="hidden sm:inline">Atur Kolom</span>

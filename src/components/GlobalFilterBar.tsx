@@ -7,7 +7,7 @@
  * Perubahan apa pun → store → seluruh komponen ikut berubah.
  */
 import { useMemo } from "react";
-import { CalendarIcon, Check, ChevronDown, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { CalendarIcon, Check, ChevronDown, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { useFinBoardStore } from "@/store/finBoardStore";
 import { uniqueValues } from "@/lib/chartAggregator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -220,6 +220,39 @@ export default function GlobalFilterBar() {
     filter.dateRange.from !== null ||
     filter.dateRange.to !== null;
 
+  /** Susun daftar chip filter aktif (label + nilai + aksi hapus satuan) (UI Bagian 3). */
+  const chips: { key: string; label: string; onRemove: () => void }[] = [];
+  if (filter.dateRange.from && filter.dateRange.to) {
+    const from = filter.dateRange.from;
+    const to = filter.dateRange.to;
+    chips.push({
+      key: `date-${from}-${to}`,
+      label: `${formatDate(from)} – ${formatDate(to)}`,
+      onRemove: () => setFilter({ dateRange: { from: null, to: null } }),
+    });
+  }
+  for (const c of filter.categories) {
+    chips.push({
+      key: `cat-${c}`,
+      label: c,
+      onRemove: () => setFilter({ categories: filter.categories.filter((x) => x !== c) }),
+    });
+  }
+  for (const d of filter.departments) {
+    chips.push({
+      key: `dept-${d}`,
+      label: d,
+      onRemove: () => setFilter({ departments: filter.departments.filter((x) => x !== d) }),
+    });
+  }
+  for (const ch of filter.channels) {
+    chips.push({
+      key: `ch-${ch}`,
+      label: ch,
+      onRemove: () => setFilter({ channels: filter.channels.filter((x) => x !== ch) }),
+    });
+  }
+
   return (
     <div className="sticky top-[57px] z-30 border-b border-surface-border bg-background/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
@@ -260,6 +293,28 @@ export default function GlobalFilterBar() {
           </Button>
         )}
       </div>
+
+      {/* Active Filter Chips (UI Bagian 3): pill tiap filter aktif + tombol × satuan */}
+      {chips.length > 0 && (
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-1.5 px-4 pb-3 sm:px-6">
+          <span className="mr-1 text-xs text-muted-foreground">Filter aktif:</span>
+          {chips.map((chip) => (
+            <span
+              key={chip.key}
+              className="inline-flex items-center gap-1 rounded-full border border-surface-border bg-white px-2.5 py-0.5 text-xs font-medium text-foreground"
+            >
+              {chip.label}
+              <button
+                onClick={chip.onRemove}
+                aria-label={`Hapus filter ${chip.label}`}
+                className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-slate-100 hover:text-danger cursor-pointer"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

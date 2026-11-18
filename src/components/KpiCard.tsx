@@ -9,20 +9,22 @@ interface Props {
   /** arah "baik": untuk Revenue/Profit naik=baik; untuk Expenses turun=baik (PRD FR-KPI) */
   goodWhenUp: boolean;
   tooltip?: string;
+  /** sub-metrik kontekstual di bawah angka utama (audit UI Bagian 4) */
+  subtitle?: string;
   /** index urutan kartu untuk stagger animation (CSS) */
   index?: number;
 }
 
-export default function KpiCard({ label, value, delta, goodWhenUp, tooltip, index = 0 }: Props) {
+export default function KpiCard({ label, value, delta, goodWhenUp, tooltip, subtitle, index = 0 }: Props) {
   // Warna delta mengikuti "apakah perubahan ini baik", bukan sekadar naik/turun
-  let deltaClass = "text-muted-foreground";
+  let deltaClass = "bg-slate-100 text-muted-foreground";
   let Icon = Minus;
   let sign = "";
 
   if (delta !== null && delta !== 0) {
     const isUp = delta > 0;
     const isGood = goodWhenUp ? isUp : !isUp;
-    deltaClass = isGood ? "text-success" : "text-danger";
+    deltaClass = isGood ? "bg-success-soft text-success" : "bg-danger-soft text-danger";
     Icon = isUp ? TrendingUp : TrendingDown;
     sign = isUp ? "+" : "";
   }
@@ -39,24 +41,29 @@ export default function KpiCard({ label, value, delta, goodWhenUp, tooltip, inde
       <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight text-foreground">
         {value}
       </p>
-      <p
-        className={`mt-2 flex items-center gap-1 text-xs font-medium ${deltaClass}`}
+      {/* Delta periode sebagai pill badge (UI Bagian 4) */}
+      <span
+        className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${deltaClass}`}
         aria-label={
           neutral
             ? "Data periode tunggal"
             : `${delta! > 0 ? "naik" : "turun"} ${Math.abs(delta!).toFixed(1)} persen`
         }
       >
-        <Icon className="h-3.5 w-3.5" />
+        <Icon className="h-3 w-3" />
         {neutral ? (
-          <span>Data periode tunggal</span>
+          <span>Periode tunggal</span>
         ) : (
           <span>
             {sign}
-            {Math.abs(delta!).toFixed(1).replace(".", ",")}% vs periode sebelumnya
+            {Math.abs(delta!).toFixed(1).replace(".", ",")}%
           </span>
         )}
-      </p>
+      </span>
+      {/* Sub-metrik kontekstual */}
+      {subtitle && (
+        <p className="mt-2 text-xs text-muted-foreground">{subtitle}</p>
+      )}
     </div>
   );
 }

@@ -16,9 +16,11 @@ import {
   type Row,
   type SortingState,
 } from "@tanstack/react-table";
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, X, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import type { NormalizedTransaction } from "@/lib/types";
-import { formatRupiah, parseFinancialNumber } from "@/lib/format";
+import { formatCurrency, parseFinancialNumber, formatPercent } from "@/lib/format";
+import { useFinBoardStore } from "@/store/finBoardStore";
+import type { CurrencyMode } from "@/store/finBoardStore";
 
 /**
  * globalFilterFn kustom: cari substring di semua kolom (teks & angka).
@@ -48,15 +50,16 @@ interface Props {
   hasBudget: boolean;
 }
 
-function MoneyCell({ value }: { value: number }) {
+function MoneyCell({ value, currency }: { value: number; currency: CurrencyMode }) {
   return (
     <span className={`tabular-nums ${value < 0 ? "text-danger" : "text-foreground"}`}>
-      {formatRupiah(value, false)}
+      {formatCurrency(value, currency, false)}
     </span>
   );
 }
 
 export default function TransactionTable({ data, hasBudget }: Props) {
+  const { currency } = useFinBoardStore();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [debouncedFilter, setDebouncedFilter] = useState("");
@@ -76,19 +79,42 @@ export default function TransactionTable({ data, hasBudget }: Props) {
       {
         accessorKey: "revenue",
         header: "Revenue",
-        cell: (info) => <MoneyCell value={info.getValue<number>()} />,
+        cell: (info) => <MoneyCell value={info.getValue<number>()} currency={currency} />,
         meta: { align: "right" },
       },
       {
         accessorKey: "expenses",
         header: "Expenses",
-        cell: (info) => <MoneyCell value={info.getValue<number>()} />,
+        cell: (info) => <MoneyCell value={info.getValue<number>()} currency={currency} />,
         meta: { align: "right" },
       },
       {
         accessorKey: "profit",
         header: "Profit",
-        cell: (info) => <MoneyCell value={info.getValue<number>()} />,
+        // Profit positif hijau, negatif merah (UI Bagian 6)
+        cell: (info) => {
+          const v = info.getValue<number>();
+          return (
+            <span className={`tabular-nums font-medium ${v < 0 ? "text-danger" : "text-success"}`}>
+              {formatCurrency(v, currency, false)}
+            </span>
+          );
+        },
+        meta: { align: "right" },
+      },
+      {
+        id: "margin",
+        header: "Margin (%)",
+        accessorFn: (row) =>
+          row.revenue > 0 ? (row.profit / row.revenue) * 100 : 0,
+        cell: (info) => {
+          const v = info.getValue<number>();
+          return (
+            <span className={`tabular-nums ${v < 0 ? "text-danger" : "text-muted-foreground"}`}>
+              {formatPercent(v)}
+            </span>
+          );
+        },
         meta: { align: "right" },
       },
     ];
@@ -98,13 +124,17 @@ export default function TransactionTable({ data, hasBudget }: Props) {
         header: "Budget",
         cell: (info) => {
           const v = info.getValue<number | null>();
-          return <span className="tabular-nums text-muted-foreground">{v !== null ? formatRupiah(v, false) : "—"}</span>;
+          return (
+            <span className="tabular-nums text-muted-foreground">
+              {v !== null ? formatCurrency(v, currency, false) : "—"}
+            </span>
+          );
         },
         meta: { align: "right" },
       });
     }
     return cols;
-  }, [hasBudget]);
+  }, [hasBudget, currency]);
 
   const table = useReactTable({
     data,
@@ -123,15 +153,27 @@ export default function TransactionTable({ data, hasBudget }: Props) {
     <div className="rounded-xl border border-surface-border bg-white shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border px-5 py-4">
         <h3 className="text-sm font-semibold text-foreground">Data Transaksi Terfilter</h3>
-        <div className="flex items-center gap-2">
+        <div className="no-print flex items-center gap-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
               placeholder="Cari transaksi…"
-              className="w-48 rounded-lg border border-surface-border py-2 pl-8 pr-3 text-sm focus:outline focus:outline-2 focus:outline-primary sm:w-64"
+              className="w-48 rounded-lg border border-surface-border py-2 pl-8 pr-8 text-sm focus:outline focus:outline-2 focus:outline-primary sm:w-64"
             />
+            {globalFilter && (
+              <button
+                onClick={() => {
+                  setGlobalFilter("");
+                  setDebouncedFilter("");
+                }}
+                aria-label="Hapus pencarian"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-slate-100 hover:text-foreground cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
           <select
             value={table.getState().pagination.pageSize}
@@ -202,10 +244,45 @@ export default function TransactionTable({ data, hasBudget }: Props) {
               ))
             )}
           </tbody>
+          {(() => {
+            const rows = table.getFilteredRowModel().rows.map((r) => r.original);
+            const totRev = rows.reduce((s, t) => s + t.revenue, 0);
+            const totExp = rows.reduce((s, t) => s + t.expenses, 0);
+            const totProf = rows.reduce((s, t) => s + t.profit, 0);
+            const totBud = rows.reduce((s, t) => s + (t.budget ?? 0), 0);
+            const totMargin = totRev > 0 ? (totProf / totRev) * 100 : 0;
+            if (rows.length === 0) return null;
+            return (
+              <tfoot className="border-t-2 border-surface-border bg-slate-50/80 font-semibold">
+                <tr>
+                  <td colSpan={4} className="px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground">
+                    Total Keseluruhan ({rows.length} transaksi)
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-foreground whitespace-nowrap">
+                    {formatCurrency(totRev, currency, false)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-foreground whitespace-nowrap">
+                    {formatCurrency(totExp, currency, false)}
+                  </td>
+                  <td className={`px-4 py-3 text-right tabular-nums whitespace-nowrap ${totProf < 0 ? "text-danger" : "text-success"}`}>
+                    {formatCurrency(totProf, currency, false)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-foreground whitespace-nowrap">
+                    {formatPercent(totMargin)}
+                  </td>
+                  {hasBudget && (
+                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                      {formatCurrency(totBud, currency, false)}
+                    </td>
+                  )}
+                </tr>
+              </tfoot>
+            );
+          })()}
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-border px-5 py-4 text-sm">
+      <div className="no-print flex flex-wrap items-center justify-between gap-3 border-t border-surface-border px-5 py-4 text-sm">
         <p className="text-muted-foreground">
           Menampilkan{" "}
           {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}–

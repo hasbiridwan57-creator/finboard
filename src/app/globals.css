@@ -68,3 +68,34 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/*
+  Mode cetak / Simpan PDF (audit UI Bagian 2).
+  Sembunyikan elemen interaktif yang tidak relevan di kertas:
+  header aksi, filter bar, paginasi & pencarian tabel, chip filter.
+*/
+@media print {
+  header {
+    display: none !important;
+  }
+  /* Filter bar sticky + chip filter */
+  .sticky {
+    display: none !important;
+  }
+  /* Kontrol paginasi, pencarian, dan page-size tabel */
+  .no-print {
+    display: none !important;
+  }
+  /* Kartu & chart tampil penuh tanpa bayangan saat dicetak */
+  body {
+    background: #fff !important;
+  }
+  .shadow-card {
+    box-shadow: none !important;
+  }
+  /* Pastikan semua chart tercetak meski di luar viewport */
+  .recharts-wrapper,
+  .recharts-responsive-container {
+    break-inside: avoid;
+  }
+}

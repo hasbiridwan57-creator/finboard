@@ -1,6 +1,6 @@
 "use client";
 
-/** Kumpulan 5 chart interaktif (PRD FR-CHR). Semua pakai Recharts + ResponsiveContainer. */
+/** Kumpulan 5 chart interaktif (PRD FR-CHR) + granularitas & switcher metrik (UI Bagian 5). */
 import { useState } from "react";
 import {
   ResponsiveContainer,
@@ -20,7 +20,7 @@ import {
   Cell,
 } from "recharts";
 import { formatCurrency, formatPercent } from "@/lib/format";
-import type { MonthlyPoint, DimensionPoint } from "@/lib/chartAggregator";
+import type { MonthlyPoint, DimensionMetricPoint, Granularity } from "@/lib/chartAggregator";
 import { useFinBoardStore } from "@/store/finBoardStore";
 import ChartTooltip from "./ChartTooltip";
 
@@ -46,18 +46,79 @@ function EmptyChart({ msg }: { msg: string }) {
   );
 }
 
+/** Toggle kecil (segmen) dipakai granularitas & switcher metrik (UI Bagian 5). */
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  ariaLabel?: string;
+}) {
+  return (
+    <div
+      className="inline-flex rounded-lg border border-surface-border bg-background p-0.5"
+      role="group"
+      aria-label={ariaLabel}
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          onClick={() => onChange(o.value)}
+          aria-pressed={value === o.value}
+          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+            value === o.value
+              ? "bg-surface text-foreground shadow-card"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Header kartu chart dengan kontrol di kanan judul (UI Bagian 5). */
+function ChartCardHeader({
+  title,
+  badge,
+  control,
+}: {
+  title: string;
+  badge?: React.ReactNode;
+  control?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {badge}
+      </div>
+      {control}
+    </div>
+  );
+}
+
 function ChartCard({
   title,
   note,
+  control,
+  badge,
   children,
 }: {
   title: string;
   note?: React.ReactNode;
+  control?: React.ReactNode;
+  badge?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-xl border border-surface-border bg-white p-5 shadow-card">
-      <h3 className="mb-4 text-sm font-semibold text-foreground">{title}</h3>
+      <ChartCardHeader title={title} badge={badge} control={control} />
       {children}
       {note != null && <div className="mt-3">{note}</div>}
     </div>
@@ -76,12 +137,44 @@ function FilterHint({ active }: { active: string[] }) {
   );
 }
 
-/** 1. Tren Revenue vs Expenses (Area) — PRD FR-CHR-1 */
-export function RevenueExpenseChart({ data }: { data: MonthlyPoint[] }) {
+/** 1. Tren Revenue vs Expenses vs Profit + granularitas (Area) — PRD FR-CHR-1 + UI Bagian 5 */
+export function RevenueExpenseChart({
+  daily,
+  weekly,
+  monthly,
+  defaultGranularity = "monthly",
+}: {
+  daily: MonthlyPoint[];
+  weekly: MonthlyPoint[];
+  monthly: MonthlyPoint[];
+  defaultGranularity?: Granularity;
+}) {
   const currency = useCurrency();
-  if (data.length === 0) return <ChartCard title="Tren Revenue vs Expenses"><EmptyChart msg="Tidak ada data." /></ChartCard>;
+  const [gran, setGran] = useState<Granularity>(defaultGranularity);
+  const data = gran === "daily" ? daily : gran === "weekly" ? weekly : monthly;
+
+  const control = (
+    <Segmented<Granularity>
+      options={[
+        { value: "daily", label: "Harian" },
+        { value: "weekly", label: "Mingguan" },
+        { value: "monthly", label: "Bulanan" },
+      ]}
+      value={gran}
+      onChange={setGran}
+      ariaLabel="Granularitas tren"
+    />
+  );
+
+  if (data.length === 0)
+    return (
+      <ChartCard title="Tren Revenue vs Expenses" control={control}>
+        <EmptyChart msg="Tidak ada data." />
+      </ChartCard>
+    );
+
   return (
-    <ChartCard title="Tren Revenue vs Expenses (Bulanan)">
+    <ChartCard title="Tren Revenue vs Expenses" control={control}>
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <defs>
@@ -101,6 +194,8 @@ export function RevenueExpenseChart({ data }: { data: MonthlyPoint[] }) {
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#2563eb" strokeWidth={2} fill="url(#revGrad)" />
           <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#dc2626" strokeWidth={2} fill="url(#expGrad)" />
+          {/* Garis ketiga hijau: Profit (UI Bagian 5) */}
+          <Line type="monotone" dataKey="profit" name="Profit" stroke="#16a34a" strokeWidth={2} dot={false} />
         </AreaChart>
       </ResponsiveContainer>
     </ChartCard>
@@ -173,15 +268,34 @@ export function RevenueBudgetChart({ data }: { data: MonthlyPoint[] }) {
   );
 }
 
-/** 3. Profit by Category (Vertical Bar + toggle Donut jika >6) — PRD FR-CHR-3 */
-export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
+/** Switcher metrik Profit/Revenue + nilai dari titik (UI Bagian 5). */
+function useMetricSwitch() {
+  const [metric, setMetric] = useState<"profit" | "revenue">("profit");
+  const control = (
+    <Segmented<"profit" | "revenue">
+      options={[
+        { value: "profit", label: "Profit" },
+        { value: "revenue", label: "Revenue" },
+      ]}
+      value={metric}
+      onChange={setMetric}
+      ariaLabel="Pilih metrik"
+    />
+  );
+  return { metric, control, pick: (d: DimensionMetricPoint) => d[metric], metricName: metric === "profit" ? "Profit" : "Revenue" };
+}
+
+/** 3. Kategori (Vertical Bar + Donut jika >6) + switcher metrik — PRD FR-CHR-3 + UI Bagian 5 */
+export function CategoryProfitChart({ data }: { data: DimensionMetricPoint[] }) {
   const [chartType, setChartType] = useState<"bar" | "donut">("bar");
   const currency = useCurrency();
   const { filter, setFilter } = useFinBoardStore();
   const active = filter.categories;
+  const { control, pick, metricName } = useMetricSwitch();
 
-  const total = data.reduce((s, d) => s + d.value, 0);
-  const showToggle = data.length > 6;
+  const values = data.map((d) => pick(d));
+  const total = values.reduce((s, v) => s + v, 0);
+  const showDonut = data.length > 6;
 
   /** Toggle kategori aktif saat batang/kupon diklik (B3). */
   const toggle = (name: string) => {
@@ -191,41 +305,39 @@ export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
     setFilter({ categories: next });
   };
 
-  if (data.length === 0) return <ChartCard title="Profit per Kategori"><EmptyChart msg="Kolom kategori tidak tersedia." /></ChartCard>;
+  // Bentuk data sesuai metrik aktif
+  const chartData = data.map((d) => ({ name: d.name, value: pick(d) }));
+
+  if (data.length === 0) return <ChartCard title="Per Kategori" control={control}><EmptyChart msg="Kolom kategori tidak tersedia." /></ChartCard>;
+
+  const typeControl = showDonut ? (
+    <Segmented<"bar" | "donut">
+      options={[
+        { value: "bar", label: "Bar" },
+        { value: "donut", label: "Donut" },
+      ]}
+      value={chartType}
+      onChange={setChartType}
+      ariaLabel="Jenis chart kategori"
+    />
+  ) : undefined;
 
   return (
-    <ChartCard title="Profit per Kategori" note={<FilterHint active={active} />}>
-      {showToggle && (
-        <div className="mb-3 flex justify-end">
-          <div className="inline-flex rounded-lg border border-surface-border bg-background p-0.5">
-            <button
-              onClick={() => setChartType("bar")}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                chartType === "bar"
-                  ? "bg-surface text-foreground shadow-card"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Bar
-            </button>
-            <button
-              onClick={() => setChartType("donut")}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                chartType === "donut"
-                  ? "bg-surface text-foreground shadow-card"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Donut
-            </button>
-          </div>
+    <ChartCard
+      title={`Per Kategori — ${metricName}`}
+      note={<FilterHint active={active} />}
+      control={
+        <div className="flex flex-wrap items-center gap-2">
+          {typeControl}
+          {control}
         </div>
-      )}
+      }
+    >
       <ResponsiveContainer width="100%" height={280}>
-        {chartType === "donut" && showToggle ? (
+        {chartType === "donut" && showDonut ? (
           <PieChart>
             <Pie
-              data={data}
+              data={chartData}
               dataKey="value"
               nameKey="name"
               innerRadius="55%"
@@ -234,7 +346,7 @@ export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
               onClick={(entry: { name?: string }) => entry?.name && toggle(entry.name)}
               style={{ cursor: "pointer" }}
             >
-              {data.map((d, i) => (
+              {chartData.map((d, i) => (
                 <Cell key={i} fill={d.value >= 0 ? CHART_COLORS[i % CHART_COLORS.length] : "#dc2626"} opacity={active.length === 0 || active.includes(d.name) ? 1 : 0.35} />
               ))}
             </Pie>
@@ -242,7 +354,7 @@ export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
             <Legend wrapperStyle={{ fontSize: 11 }} />
           </PieChart>
         ) : (
-          <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 45 }}>
+          <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 45 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
             <XAxis
               dataKey="name"
@@ -258,12 +370,12 @@ export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
             <Tooltip content={<ChartTooltip valueFormatter={(v) => formatCurrency(v, currency)} />} cursor={{ fill: "#f1f5f9" }} />
             <Bar
               dataKey="value"
-              name="Profit"
+              name={metricName}
               radius={[4, 4, 0, 0]}
               onClick={(entry: { name?: string }) => entry?.name && toggle(entry.name)}
               style={{ cursor: "pointer" }}
             >
-              {data.map((d, i) => (
+              {chartData.map((d, i) => (
                 <Cell key={i} fill={d.value >= 0 ? "#2563eb" : "#dc2626"} opacity={active.length === 0 || active.includes(d.name) ? 1 : 0.35} />
               ))}
             </Bar>
@@ -274,11 +386,12 @@ export function CategoryProfitChart({ data }: { data: DimensionPoint[] }) {
   );
 }
 
-/** 4. Profit by Department (Horizontal Bar) — PRD FR-CHR-4 + klik filter (B3) */
-export function DepartmentProfitChart({ data }: { data: DimensionPoint[] }) {
+/** 4. Departemen (Horizontal Bar) + switcher metrik — PRD FR-CHR-4 + UI Bagian 5 */
+export function DepartmentProfitChart({ data }: { data: DimensionMetricPoint[] }) {
   const currency = useCurrency();
   const { filter, setFilter } = useFinBoardStore();
   const active = filter.departments;
+  const { control, pick, metricName } = useMetricSwitch();
 
   const toggle = (name: string) => {
     const next = active.includes(name)
@@ -287,24 +400,26 @@ export function DepartmentProfitChart({ data }: { data: DimensionPoint[] }) {
     setFilter({ departments: next });
   };
 
-  if (data.length === 0) return <ChartCard title="Profit per Departemen"><EmptyChart msg="Kolom departemen tidak tersedia." /></ChartCard>;
+  const chartData = data.map((d) => ({ name: d.name, value: pick(d) }));
+
+  if (data.length === 0) return <ChartCard title="Per Departemen" control={control}><EmptyChart msg="Kolom departemen tidak tersedia." /></ChartCard>;
   return (
-    <ChartCard title="Profit per Departemen" note={<FilterHint active={active} />}>
+    <ChartCard title={`Per Departemen — ${metricName}`} note={<FilterHint active={active} />} control={control}>
       <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={data} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+        <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
           <XAxis type="number" tickFormatter={makeYAxisFormatter(currency)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
           <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={170} />
           <Tooltip content={<ChartTooltip valueFormatter={(v) => formatCurrency(v, currency)} />} cursor={{ fill: "#f1f5f9" }} />
           <Bar
             dataKey="value"
-            name="Profit"
+            name={metricName}
             radius={[0, 4, 4, 0]}
             barSize={20}
             onClick={(entry: { name?: string }) => entry?.name && toggle(entry.name)}
             style={{ cursor: "pointer" }}
           >
-            {data.map((d, i) => (
+            {chartData.map((d, i) => (
               <Cell key={i} fill={d.value >= 0 ? "#16a34a" : "#dc2626"} opacity={active.length === 0 || active.includes(d.name) ? 1 : 0.35} />
             ))}
           </Bar>
@@ -314,16 +429,42 @@ export function DepartmentProfitChart({ data }: { data: DimensionPoint[] }) {
   );
 }
 
-/** 5. Profit by Channel (Donut) — PRD FR-CHR-5 + catatan kanal rugi (A4) */
-export function ChannelProfitChart({ data }: { data: DimensionPoint[] }) {
+/** 5. Kanal (Donut) + switcher metrik + klik-filter + badge kanal rugi (UI Bagian 5) */
+export function ChannelProfitChart({ data }: { data: DimensionMetricPoint[] }) {
   const currency = useCurrency();
-  const negative = data.filter((d) => d.value <= 0);
-  const positive = data.filter((d) => d.value > 0);
-  if (positive.length === 0)
-    return <ChartCard title="Profit per Kanal Penjualan"><EmptyChart msg="Kolom kanal tidak tersedia atau tidak ada profit." /></ChartCard>;
+  const { filter, setFilter } = useFinBoardStore();
+  const active = filter.channels;
+  const { control, pick, metricName } = useMetricSwitch();
+
+  const toggle = (name: string) => {
+    const next = active.includes(name)
+      ? active.filter((c) => c !== name)
+      : [...active, name];
+    setFilter({ channels: next });
+  };
+
+  // Badge ringkas kanal rugi di header (UI Bagian 5) — menggantikan catatan panjang di bawah.
+  const lossChannels = data.filter((d) => d.profit <= 0);
+  const badge =
+    lossChannels.length > 0 ? (
+      <span
+        title={`Kanal profit ≤ 0 (tak tampil di donut): ${lossChannels.map((d) => d.name).join(", ")}`}
+        className="rounded-full border border-danger-border bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger"
+      >
+        {lossChannels.length} kanal rugi
+      </span>
+    ) : undefined;
+
+  // Donut hanya menampilkan nilai > 0 sesuai metrik aktif.
+  const all = data.map((d) => ({ name: d.name, value: pick(d) }));
+  const positive = all.filter((d) => d.value > 0);
   const total = positive.reduce((s, d) => s + d.value, 0);
+
+  if (positive.length === 0)
+    return <ChartCard title="Per Kanal" control={control}><EmptyChart msg="Kolom kanal tidak tersedia." /></ChartCard>;
+
   return (
-    <ChartCard title="Profit per Kanal Penjualan">
+    <ChartCard title={`Per Kanal — ${metricName}`} badge={badge} control={control} note={<FilterHint active={active} />}>
       <ResponsiveContainer width="100%" height={280}>
         <PieChart>
           <Pie
@@ -333,9 +474,11 @@ export function ChannelProfitChart({ data }: { data: DimensionPoint[] }) {
             innerRadius="60%"
             outerRadius="85%"
             paddingAngle={2}
+            onClick={(entry: { name?: string }) => entry?.name && toggle(entry.name)}
+            style={{ cursor: "pointer" }}
           >
             {positive.map((_, i) => (
-              <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+              <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} opacity={active.length === 0 || active.includes(positive[i].name) ? 1 : 0.35} />
             ))}
           </Pie>
           <Tooltip content={<ChartTooltip valueFormatter={(v) => `${formatCurrency(v, currency)} (${formatPercent((v / total) * 100)})`} />} />
@@ -343,16 +486,11 @@ export function ChannelProfitChart({ data }: { data: DimensionPoint[] }) {
             {formatCurrency(total, currency)}
           </text>
           <text x="50%" y="56%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground" fontSize={11}>
-            Total Profit
+            Total {metricName}
           </text>
           <Legend wrapperStyle={{ fontSize: 12 }} />
         </PieChart>
       </ResponsiveContainer>
-      {negative.length > 0 && (
-        <p className="mt-2 rounded-lg border border-danger-border bg-danger-soft px-3 py-2 text-xs text-danger">
-          Catatan: {negative.length} kanal dengan profit ≤ 0 tidak ditampilkan pada donut ({negative.map((d) => d.name).join(", ")}).
-        </p>
-      )}
     </ChartCard>
   );
 }

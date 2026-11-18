@@ -5,7 +5,8 @@
 import type { NormalizedTransaction } from "@/lib/types";
 import { aggregateMonthly } from "./chartAggregator";
 import { computeKpi } from "./kpiCalculator";
-import { formatRupiah, formatPercent } from "./format";
+import { formatCurrency, formatPercent } from "./format";
+import type { CurrencyMode } from "@/store/finBoardStore";
 
 export interface Insight {
   text: string;
@@ -13,10 +14,13 @@ export interface Insight {
   tone: "info" | "positive" | "warning";
 }
 
-export function generateInsights(txs: NormalizedTransaction[]): Insight[] {
+export function generateInsights(
+  txs: NormalizedTransaction[],
+  currency: CurrencyMode = "IDR",
+): Insight[] {
   if (txs.length === 0) return [];
   const insights: Insight[] = [];
-
+  const money = (v: number) => formatCurrency(v, currency);
   const kpi = computeKpi(txs);
   const months = aggregateMonthly(txs);
 
@@ -28,7 +32,7 @@ export function generateInsights(txs: NormalizedTransaction[]): Insight[] {
     const pct = (topCat[1] / kpi.totalRevenue) * 100;
     insights.push({
       tone: "info",
-      text: `Kategori **${topCat[0]}** menjadi penyumbang pendapatan terbesar sebesar **${formatPercent(pct)}** (**${formatRupiah(topCat[1])}**) dari total revenue.`,
+      text: `Kategori **${topCat[0]}** menjadi penyumbang pendapatan terbesar sebesar **${formatPercent(pct)}** (**${money(topCat[1])}**) dari total revenue.`,
     });
   }
 
@@ -59,7 +63,7 @@ export function generateInsights(txs: NormalizedTransaction[]): Insight[] {
     const margin = topDept[1].revenue > 0 ? (topDept[1].profit / topDept[1].revenue) * 100 : 0;
     insights.push({
       tone: "positive",
-      text: `Departemen **${topDept[0]}** mencatatkan laba tertinggi sebesar **${formatRupiah(topDept[1].profit)}** dengan margin efisiensi **${formatPercent(margin)}**.`,
+      text: `Departemen **${topDept[0]}** mencatatkan laba tertinggi sebesar **${money(topDept[1].profit)}** dengan margin efisiensi **${formatPercent(margin)}**.`,
     });
   }
 
@@ -80,7 +84,7 @@ export function generateInsights(txs: NormalizedTransaction[]): Insight[] {
     const worst = lossSegments[0];
     insights.push({
       tone: "warning",
-      text: `Perhatian: ${worst.dim} **${worst.name}** mengalami defisit laba sebesar **${formatRupiah(worst.profit)}** pada periode terpilih.`,
+      text: `Perhatian: ${worst.dim} **${worst.name}** mengalami defisit laba sebesar **${money(worst.profit)}** pada periode terpilih.`,
     });
   }
 
@@ -91,7 +95,7 @@ export function generateInsights(txs: NormalizedTransaction[]): Insight[] {
       const pct = (kpi.totalRevenue / totalBudget) * 100;
       insights.push({
         tone: pct >= 100 ? "positive" : "info",
-        text: `Realisasi pendapatan mencapai **${formatPercent(pct)}** dari total anggaran (**${formatRupiah(kpi.totalRevenue)}** vs target **${formatRupiah(totalBudget)}**).`,
+        text: `Realisasi pendapatan mencapai **${formatPercent(pct)}** dari total anggaran (**${money(kpi.totalRevenue)}** vs target **${money(totalBudget)}**).`,
       });
     }
   }

@@ -117,6 +117,25 @@ export default function UploadView() {
 
         <CsvDropzone onParsed={() => router.push("/dashboard")} onParsingStart={handleParsingStart} onParsingError={handleParsingError} />
 
+        {/* Badge kolom yang dikenali otomatis (UI Bagian 6) */}
+        <div className="mt-4">
+          <p className="mb-2 text-center text-xs text-muted-foreground">
+            Kolom yang dikenali otomatis:
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            {["Tanggal", "Revenue", "Expenses", "Profit", "Kategori", "Departemen", "Channel", "Budget"].map(
+              (c) => (
+                <span
+                  key={c}
+                  className="rounded-full border border-surface-border bg-white px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+                >
+                  {c}
+                </span>
+              ),
+            )}
+          </div>
+        </div>
+
         <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-surface-border" />
           <span className="text-xs text-muted-foreground">atau</span>
