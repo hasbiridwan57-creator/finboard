@@ -70,6 +70,24 @@
 }
 
 /*
+  Mobile responsiveness (Gemini audit).
+  .no-scrollbar: sembunyikan scrollbar pada baris filter yang scrollable di HP.
+  Pada layar kecil, grafik Recharts lebih pendek agar tak memakan viewport.
+*/
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+@media (max-width: 767px) {
+  .recharts-responsive-container {
+    height: 220px !important;
+  }
+}
+
+/*
   Mode cetak / Simpan PDF (audit UI Bagian 2).
   Sembunyikan elemen interaktif yang tidak relevan di kertas:
   header aksi, filter bar, paginasi & pencarian tabel, chip filter.

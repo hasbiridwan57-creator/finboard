@@ -177,12 +177,12 @@ function DashboardContent() {
       </div>
 
       {/* Unified sticky header + filter (Gemini fix #4) */}
-      <div className="sticky top-0 z-40 no-print">
+      <div className="w-full md:sticky md:top-0 z-40 no-print">
         <DashboardHeader onOpenMapping={() => setMappingOpen(true)} />
         <GlobalFilterBar />
       </div>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl min-w-0 space-y-6 px-4 py-6 sm:px-6">
         {/* Zero-match state (UI Bagian 3): jika filter tak menghasilkan transaksi */}
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-surface-border bg-white px-6 py-16 text-center shadow-card">

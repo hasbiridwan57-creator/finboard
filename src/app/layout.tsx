@@ -20,8 +20,8 @@ export default function RootLayout({
 }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="id" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
-        <main className="flex flex-1 flex-col">{children}</main>
+      <body className="min-h-full flex flex-col overflow-x-clip">
+        <main className="flex w-full flex-1 flex-col min-w-0">{children}</main>
         <Toaster position="top-right" richColors />
       </body>
     </html>

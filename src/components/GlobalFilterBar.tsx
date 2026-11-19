@@ -265,7 +265,7 @@ export default function GlobalFilterBar() {
 
   return (
     <div className="z-30 border-b border-surface-border bg-background/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
+      <div className="no-scrollbar mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto px-4 py-3 sm:px-6 md:flex-wrap md:overflow-visible">
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
         <DateRangeControl min={min} max={max} />
         {categories.length > 1 && (
