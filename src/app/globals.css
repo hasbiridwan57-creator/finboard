@@ -78,10 +78,8 @@
   header {
     display: none !important;
   }
-  /* Filter bar sticky + chip filter */
-  .sticky {
-    display: none !important;
-  }
+  /* Header & filter bar disembunyikan via .no-print; .sticky TIDAK disembunyikan
+     agar kolom pertama sticky pada MonthlyPnLTable tetap tercetak di PDF. */
   /* Kontrol paginasi, pencarian, dan page-size tabel */
   .no-print {
     display: none !important;

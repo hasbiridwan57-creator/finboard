@@ -80,21 +80,36 @@ interface Props {
   hasBudget: boolean;
   /** Kontrol pencarian global dari luar (drill-down anomali). Jika tidak dikirim, pakai state internal. */
   externalSearch?: string;
+  /** Dipanggil setiap pencarian berubah (untuk sinkron dengan state induk saat mode terkontrol). */
+  onSearchChange?: (value: string) => void;
 }
 
-function MoneyCell({ value, currency }: { value: number; currency: CurrencyMode }) {
+function MoneyCell({
+  value,
+  currency,
+  exchangeRate,
+}: {
+  value: number;
+  currency: CurrencyMode;
+  exchangeRate: number;
+}) {
   return (
     <span className={`tabular-nums ${value < 0 ? "text-danger" : "text-foreground"}`}>
-      {formatCurrency(value, currency, false)}
+      {formatCurrency(value, currency, false, exchangeRate)}
     </span>
   );
 }
 
-export default function TransactionTable({ data, hasBudget, externalSearch }: Props) {
+export default function TransactionTable({ data, hasBudget, externalSearch, onSearchChange }: Props) {
   const { currency, exchangeRate } = useFinBoardStore();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [internalFilter, setInternalFilter] = useState("");
   const search = externalSearch !== undefined ? externalSearch : internalFilter;
+  // Helper: mode terkontrol → callback ke induk; mode bebas → state internal.
+  const setSearch = (val: string) => {
+    if (onSearchChange) onSearchChange(val);
+    else setInternalFilter(val);
+  };
   const [debouncedFilter, setDebouncedFilter] = useState(search);
 
   // debounce 200ms (PRD FR-TBL-03)
@@ -112,13 +127,17 @@ export default function TransactionTable({ data, hasBudget, externalSearch }: Pr
       {
         accessorKey: "revenue",
         header: "Revenue",
-        cell: (info) => <MoneyCell value={info.getValue<number>()} currency={currency} />,
+        cell: (info) => (
+          <MoneyCell value={info.getValue<number>()} currency={currency} exchangeRate={exchangeRate} />
+        ),
         meta: { align: "right" },
       },
       {
         accessorKey: "expenses",
         header: "Expenses",
-        cell: (info) => <MoneyCell value={info.getValue<number>()} currency={currency} />,
+        cell: (info) => (
+          <MoneyCell value={info.getValue<number>()} currency={currency} exchangeRate={exchangeRate} />
+        ),
         meta: { align: "right" },
       },
       {
@@ -129,7 +148,7 @@ export default function TransactionTable({ data, hasBudget, externalSearch }: Pr
           const v = info.getValue<number>();
           return (
             <span className={`tabular-nums font-medium ${v < 0 ? "text-danger" : "text-success"}`}>
-              {formatCurrency(v, currency, false)}
+              {formatCurrency(v, currency, false, exchangeRate)}
             </span>
           );
         },
@@ -159,7 +178,7 @@ export default function TransactionTable({ data, hasBudget, externalSearch }: Pr
           const v = info.getValue<number | null>();
           return (
             <span className="tabular-nums text-muted-foreground">
-              {v !== null ? formatCurrency(v, currency, false) : "—"}
+              {v !== null ? formatCurrency(v, currency, false, exchangeRate) : "—"}
             </span>
           );
         },
@@ -167,7 +186,7 @@ export default function TransactionTable({ data, hasBudget, externalSearch }: Pr
       });
     }
     return cols;
-  }, [hasBudget, currency]);
+  }, [hasBudget, currency, exchangeRate]);
 
   const matchGlobalFilter = useMemo(
     () => makeMatchGlobalFilter(exchangeRate),
@@ -197,14 +216,14 @@ export default function TransactionTable({ data, hasBudget, externalSearch }: Pr
             <input
               id="transaction-search"
               value={search}
-              onChange={(e) => setInternalFilter(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari transaksi…"
               className="w-48 rounded-lg border border-surface-border py-2 pl-8 pr-8 text-sm focus:outline focus:outline-2 focus:outline-primary sm:w-64"
             />
             {search && (
               <button
                 onClick={() => {
-                  setInternalFilter("");
+                  setSearch("");
                   setDebouncedFilter("");
                 }}
                 aria-label="Hapus pencarian"
@@ -298,20 +317,20 @@ export default function TransactionTable({ data, hasBudget, externalSearch }: Pr
                     Total Keseluruhan ({rows.length} transaksi)
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-foreground whitespace-nowrap">
-                    {formatCurrency(totRev, currency, false)}
+                    {formatCurrency(totRev, currency, false, exchangeRate)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-foreground whitespace-nowrap">
-                    {formatCurrency(totExp, currency, false)}
+                    {formatCurrency(totExp, currency, false, exchangeRate)}
                   </td>
                   <td className={`px-4 py-3 text-right tabular-nums whitespace-nowrap ${totProf < 0 ? "text-danger" : "text-success"}`}>
-                    {formatCurrency(totProf, currency, false)}
+                    {formatCurrency(totProf, currency, false, exchangeRate)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-foreground whitespace-nowrap">
                     {formatPercent(totMargin)}
                   </td>
                   {hasBudget && (
                     <td className="px-4 py-3 text-right tabular-nums text-muted-foreground whitespace-nowrap">
-                      {formatCurrency(totBud, currency, false)}
+                      {formatCurrency(totBud, currency, false, exchangeRate)}
                     </td>
                   )}
                 </tr>

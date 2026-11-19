@@ -61,7 +61,9 @@ export function SegmentParetoCard({ txs }: { txs: NormalizedTransaction[] }) {
     return sorted.map((g) => {
       const contribution = totalRev > 0 ? (g.rev / totalRev) * 100 : 0;
       running += contribution;
-      const isPareto = !paretoMarked;
+      // Pareto 80/20: tandai sampai kumulatif pertama kali mencapai/melebihi 80%.
+      // Guard totalRev > 0 agar dataset kosong/zero-revenue tidak salah tandai.
+      const isPareto = totalRev > 0 && !paretoMarked;
       if (running >= 80) paretoMarked = true;
       return {
         name: g.name,
@@ -148,7 +150,11 @@ export function SegmentParetoCard({ txs }: { txs: NormalizedTransaction[] }) {
                     <td className="px-4 py-2 text-right tabular-nums">
                       {formatCurrency(r.totalExpenses, currency, true, exchangeRate)}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums">
+                    <td
+                      className={`px-4 py-2 text-right tabular-nums font-medium ${
+                        r.totalProfit < 0 ? "text-danger" : "text-success"
+                      }`}
+                    >
                       {formatCurrency(r.totalProfit, currency, true, exchangeRate)}
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">

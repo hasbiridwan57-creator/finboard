@@ -51,7 +51,9 @@ export default function DashboardPage() {
   // di dalam useEffect (bukan saat render) agar tidak memutasi store saat render.
   const hasTriedRestore = useRef(false);
   useEffect(() => {
-    if (hasTriedRestore.current) return;
+    // Guard: jangan restore jika sudah ada dataset ATAU sudah pernah dicoba.
+    // Mencegah double-parse dan menimpa state needsManualMapping (Gemini fix #3).
+    if (useFinBoardStore.getState().dataset || hasTriedRestore.current) return;
     hasTriedRestore.current = true;
     try {
       const raw = getRawCsv();
@@ -174,8 +176,11 @@ function DashboardContent() {
         </div>
       </div>
 
-      <DashboardHeader onOpenMapping={() => setMappingOpen(true)} />
-      <GlobalFilterBar />
+      {/* Unified sticky header + filter (Gemini fix #4) */}
+      <div className="sticky top-0 z-40 no-print">
+        <DashboardHeader onOpenMapping={() => setMappingOpen(true)} />
+        <GlobalFilterBar />
+      </div>
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
         {/* Zero-match state (UI Bagian 3): jika filter tak menghasilkan transaksi */}
@@ -271,11 +276,10 @@ function DashboardContent() {
         {/* Monthly P&L Statement (FP&A style, collapsible) */}
         <MonthlyPnLTable monthly={monthly} hasBudget={budgetAvailable} />
 
-        {/* Modul FP&A: What-If Simulator + Analisis Pareto 80/20 (Gemini M4) */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <WhatIfSimulator kpi={kpi} />
-          <SegmentParetoCard txs={filtered} />
-        </div>
+        {/* Modul FP&A: What-If Simulator + Analisis Pareto 80/20 (Gemini M4).
+            Full-width bertumpuk agar tabel Pareto 9 kolom lega. */}
+        <WhatIfSimulator kpi={kpi} />
+        <SegmentParetoCard txs={filtered} />
 
         {/* Insights + Deteksi Anomali (Gemini M5.2): berdampingan */}
         <div className="grid gap-6 lg:grid-cols-2">
@@ -288,6 +292,7 @@ function DashboardContent() {
           data={filtered}
           hasBudget={budgetAvailable}
           externalSearch={tableSearch}
+          onSearchChange={setTableSearch}
         />
           </>
         )}

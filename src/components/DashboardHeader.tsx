@@ -117,7 +117,7 @@ function describeFilter(
   if (filter.categories.length > 0) parts.push(`kategori: ${filter.categories.join(", ")}`);
   if (filter.departments.length > 0) parts.push(`departemen: ${filter.departments.join(", ")}`);
   if (filter.channels.length > 0) parts.push(`kanal: ${filter.channels.join(", ")}`);
-  return parts.length > 0 ? parts.join("; ") : "Semua";
+  return parts.length > 0 ? parts.join(" | ") : "Semua";
 }
 
 /** Ekspor CSV ber-template laporan (M6.1): header laporan + ringkasan eksekutif + rincian transaksi. */
@@ -136,14 +136,14 @@ function exportReportCsv(
 
   lines.push("sep=;");
   lines.push("LAPORAN ANALITIK KEUANGAN — FINBOARD");
-  lines.push(`Sumber Data;${fileName}`);
-  lines.push(`Tanggal Ekspor;${format(today, "dd MMM yyyy")}`);
+  lines.push([`Sumber Data`, fileName].map(csvEscape).join(sep));
+  lines.push([`Tanggal Ekspor`, format(today, "dd MMM yyyy")].map(csvEscape).join(sep));
   const currencyLabel =
     currency === "USD"
       ? `USD (kurs 1 USD = Rp ${exchangeRate.toFixed(0)})`
       : "IDR";
-  lines.push(`Mata Uang;${currencyLabel}`);
-  lines.push(`Filter Aktif;${filterDesc}`);
+  lines.push([`Mata Uang`, currencyLabel].map(csvEscape).join(sep));
+  lines.push([`Filter Aktif`, filterDesc].map(csvEscape).join(sep));
   lines.push("");
 
   lines.push("RINGKASAN EKSEKUTIF");
@@ -186,6 +186,7 @@ function exportReportCsv(
     );
   });
   const avgMargin = sumRevenue !== 0 ? (sumProfit / sumRevenue) * 100 : 0;
+  const hasAnyBudget = txs.some((t) => t.budget !== null);
   lines.push(
     [
       "TOTAL KESELURUHAN",
@@ -197,7 +198,7 @@ function exportReportCsv(
       csvNumber(sumExpenses, currency, exchangeRate),
       csvNumber(sumProfit, currency, exchangeRate),
       avgMargin.toFixed(2),
-      csvNumber(sumBudget, currency, exchangeRate),
+      hasAnyBudget ? csvNumber(sumBudget, currency, exchangeRate) : "",
     ]
       .map(csvEscape)
       .join(sep),
@@ -207,12 +208,8 @@ function exportReportCsv(
   downloadTextFile(content, `finboard-laporan-${format(today, "yyyy-MM-dd")}.csv`, "text/csv;charset=utf-8;");
 }
 
-/** Ekspor CSV data mentah (M6.1): datar, siap diunggah ulang ke FinBoard. */
-function exportRawCsv(
-  txs: NormalizedTransaction[],
-  currency: "IDR" | "USD",
-  exchangeRate: number,
-): void {
+/** Ekspor CSV data mentah (M6.1): datar, nilai IDR asli agar aman diunggah ulang ke FinBoard. */
+function exportRawCsv(txs: NormalizedTransaction[]): void {
   const today = new Date();
   const sep = ";";
   const eol = "\r\n";
@@ -222,14 +219,14 @@ function exportRawCsv(
   txs.forEach((t) => {
     lines.push(
       [
-        format(new Date(t.date), "yyyy-MM-dd"),
+        t.date,
         t.category,
         t.department,
         t.channel,
-        csvNumber(t.revenue, currency, exchangeRate),
-        csvNumber(t.expenses, currency, exchangeRate),
-        csvNumber(t.profit, currency, exchangeRate),
-        t.budget === null ? "" : csvNumber(t.budget, currency, exchangeRate),
+        Math.round(t.revenue),
+        Math.round(t.expenses),
+        Math.round(t.profit),
+        t.budget === null ? "" : Math.round(t.budget),
       ]
         .map(csvEscape)
         .join(sep),
@@ -369,14 +366,14 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
       toast.info("Tidak ada transaksi terfilter untuk diekspor.");
       return;
     }
-    exportRawCsv(filteredTxs, currency, exchangeRate);
+    exportRawCsv(filteredTxs);
     toast.success("Data mentah CSV diunduh", {
       description: `${filteredTxs.length} transaksi siap diunggah ulang.`,
     });
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-surface-border bg-white/95 backdrop-blur">
+    <header className="border-b border-surface-border bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
@@ -565,11 +562,11 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
                     </li>
                     <li className="flex gap-2">
                       <span className="text-primary">•</span>
-                      <span>Matriks P&amp;L: Revenue, Expenses &amp; Profit dibandingkan antar dimensi.</span>
+                      <span>Matriks P&amp;L: bandingkan performa Revenue, Expenses &amp; Profit antar bulan.</span>
                     </li>
                     <li className="flex gap-2">
                       <span className="text-primary">•</span>
-                      <span>Drill-down anomali: klik sel aneh di tabel untuk melihat rincian transaksinya.</span>
+                      <span>Drill-down anomali: klik kartu di panel Deteksi Anomali untuk melihat transaksinya di tabel.</span>
                     </li>
                   </ul>
                 </div>

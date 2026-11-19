@@ -5,7 +5,7 @@
  * Menampilkan maksimal 4 transaksi outlier hasil `detectAnomalies()`.
  * Kartu dapat diklik untuk memeriksa baris terkait di tabel transaksi.
  */
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { id } from "date-fns/locale";
 import { AlertTriangle, TrendingUp, Coins, MousePointerClick } from "lucide-react";
 import type { NormalizedTransaction } from "@/lib/types";
@@ -86,7 +86,7 @@ export default function AnomalyHighlights({ anomalies, onInspect }: Props) {
                         )}
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {format(a.tx.date, "dd MMM yyyy", { locale: id })} · {a.tx.category} ·{" "}
+                        {format(parseISO(a.tx.date), "dd MMM yyyy", { locale: id })} · {a.tx.category} ·{" "}
                         {a.tx.department}
                       </div>
                       <div className="mt-1 text-sm font-semibold tabular-nums text-foreground">

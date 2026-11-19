@@ -155,7 +155,7 @@ export default function UploadView() {
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 py-12">
-      <div className="w-full max-w-xl">
+      <div className="w-full max-w-2xl">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-white shadow-card">
             <BarChart3 className="h-7 w-7" />
@@ -254,7 +254,7 @@ export default function UploadView() {
         {/* Pilihan skenario demo */}
         <div className="mb-3">
           <p className="mb-2 text-xs font-medium text-muted-foreground">Pilih skenario demo:</p>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             {DEMO_SCENARIOS.map((s) => (
               <button
                 key={s.id}

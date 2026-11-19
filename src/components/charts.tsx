@@ -4,7 +4,6 @@
 import { useState, useMemo, useEffect } from "react";
 import {
   ResponsiveContainer,
-  AreaChart,
   Area,
   XAxis,
   YAxis,
@@ -216,7 +215,7 @@ export function RevenueExpenseChart({
   return (
     <ChartCard title="Tren Revenue vs Expenses" control={control}>
       <ResponsiveContainer width="100%" height={280}>
-        <AreaChart data={displayData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+        <ComposedChart data={displayData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#2563eb" stopOpacity={0.25} />
@@ -236,8 +235,8 @@ export function RevenueExpenseChart({
           <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#dc2626" strokeWidth={2} fill="url(#expGrad)" />
           {/* Garis ketiga hijau: Profit (UI Bagian 5) */}
           <Line type="monotone" dataKey="profit" name="Profit" stroke="#16a34a" strokeWidth={2} dot={false} />
-          {/* Garis rata-rata Revenue (M5.1): putus-putus abu dengan label kecil. */}
-          {displayData.length > 0 && (
+          {/* Garis rata-rata Revenue (M5.1): hanya mode periodik, putus-putus abu. */}
+          {mode === "periodik" && displayData.length > 0 && (
             <ReferenceLine
               y={avgRevenue}
               stroke="#94A3B8"
@@ -250,7 +249,7 @@ export function RevenueExpenseChart({
               }}
             />
           )}
-        </AreaChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </ChartCard>
   );
