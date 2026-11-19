@@ -32,7 +32,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { computeKpi } from "@/lib/kpiCalculator";
-import { applyFilter } from "@/lib/chartAggregator";
+import { applyFilter, aggregateMonthly } from "@/lib/chartAggregator";
+import { exportExcel } from "@/lib/excelExporter";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { generateInsights } from "@/lib/insightGenerator";
 import type { CanonicalField, NormalizedTransaction } from "@/lib/types";
@@ -83,14 +84,6 @@ function csvEscape(value: string | number): string {
   return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** Helper CSV: nilai nominal murni (tanpa simbol) sesuai mode mata uang. */
-function csvNumber(value: number, currency: "IDR" | "USD", exchangeRate: number): string {
-  if (currency === "USD") {
-    return (value / exchangeRate).toFixed(2);
-  }
-  return String(Math.round(value));
-}
-
 /** Unduh teks sebagai file via Blob + anchor sementara. */
 function downloadTextFile(content: string, fileName: string, mime: string): void {
   const blob = new Blob([content], { type: mime });
@@ -118,94 +111,6 @@ function describeFilter(
   if (filter.departments.length > 0) parts.push(`departemen: ${filter.departments.join(", ")}`);
   if (filter.channels.length > 0) parts.push(`kanal: ${filter.channels.join(", ")}`);
   return parts.length > 0 ? parts.join(" | ") : "Semua";
-}
-
-/** Ekspor CSV ber-template laporan (M6.1): header laporan + ringkasan eksekutif + rincian transaksi. */
-function exportReportCsv(
-  txs: NormalizedTransaction[],
-  fileName: string,
-  currency: "IDR" | "USD",
-  exchangeRate: number,
-  filterDesc: string,
-): void {
-  const kpi = computeKpi(txs);
-  const today = new Date();
-  const sep = ";";
-  const eol = "\r\n";
-  const lines: string[] = [];
-
-  lines.push("sep=;");
-  lines.push("LAPORAN ANALITIK KEUANGAN — FINBOARD");
-  lines.push([`Sumber Data`, fileName].map(csvEscape).join(sep));
-  lines.push([`Tanggal Ekspor`, format(today, "dd MMM yyyy")].map(csvEscape).join(sep));
-  const currencyLabel =
-    currency === "USD"
-      ? `USD (kurs 1 USD = Rp ${exchangeRate.toFixed(0)})`
-      : "IDR";
-  lines.push([`Mata Uang`, currencyLabel].map(csvEscape).join(sep));
-  lines.push([`Filter Aktif`, filterDesc].map(csvEscape).join(sep));
-  lines.push("");
-
-  lines.push("RINGKASAN EKSEKUTIF");
-  lines.push(`Metrik;Nilai`);
-  lines.push(`Total Revenue;${csvNumber(kpi.totalRevenue, currency, exchangeRate)}`);
-  lines.push(`Total Expenses;${csvNumber(kpi.totalExpenses, currency, exchangeRate)}`);
-  lines.push(`Total Profit;${csvNumber(kpi.totalProfit, currency, exchangeRate)}`);
-  lines.push(`Profit Margin (%);${kpi.profitMargin.toFixed(2)}`);
-  lines.push("");
-
-  lines.push("RINCIAN TRANSAKSI TERFILTER");
-  lines.push(
-    ["No", "Tanggal", "Kategori", "Departemen", "Kanal Penjualan", "Revenue", "Expenses", "Profit", "Margin (%)", "Budget"].join(sep),
-  );
-  let sumRevenue = 0;
-  let sumExpenses = 0;
-  let sumProfit = 0;
-  let sumBudget = 0;
-  txs.forEach((t, idx) => {
-    sumRevenue += t.revenue;
-    sumExpenses += t.expenses;
-    sumProfit += t.profit;
-    if (t.budget !== null) sumBudget += t.budget;
-    const margin = t.revenue !== 0 ? (t.profit / t.revenue) * 100 : 0;
-    lines.push(
-      [
-        idx + 1,
-        t.date,
-        t.category,
-        t.department,
-        t.channel,
-        csvNumber(t.revenue, currency, exchangeRate),
-        csvNumber(t.expenses, currency, exchangeRate),
-        csvNumber(t.profit, currency, exchangeRate),
-        margin.toFixed(2),
-        t.budget === null ? "" : csvNumber(t.budget, currency, exchangeRate),
-      ]
-        .map(csvEscape)
-        .join(sep),
-    );
-  });
-  const avgMargin = sumRevenue !== 0 ? (sumProfit / sumRevenue) * 100 : 0;
-  const hasAnyBudget = txs.some((t) => t.budget !== null);
-  lines.push(
-    [
-      "TOTAL KESELURUHAN",
-      "",
-      "",
-      "",
-      "",
-      csvNumber(sumRevenue, currency, exchangeRate),
-      csvNumber(sumExpenses, currency, exchangeRate),
-      csvNumber(sumProfit, currency, exchangeRate),
-      avgMargin.toFixed(2),
-      hasAnyBudget ? csvNumber(sumBudget, currency, exchangeRate) : "",
-    ]
-      .map(csvEscape)
-      .join(sep),
-  );
-
-  const content = "\uFEFF" + lines.join(eol);
-  downloadTextFile(content, `finboard-laporan-${format(today, "yyyy-MM-dd")}.csv`, "text/csv;charset=utf-8;");
 }
 
 /** Ekspor CSV data mentah (M6.1): datar, nilai IDR asli agar aman diunggah ulang ke FinBoard. */
@@ -288,11 +193,19 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
   const { dataset, filter, clearSession, currency, setCurrency, exchangeRate, resetFilter } =
     useFinBoardStore();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   const filteredTxs = useMemo(() => {
     if (!dataset) return [];
     return applyFilter(dataset.transactions, filter);
   }, [dataset, filter]);
+
+  // Data agregat untuk ekspor Excel (Gemini: upgrade ekspor .xlsx)
+  const monthly = useMemo(() => aggregateMonthly(filteredTxs), [filteredTxs]);
+  const hasBudget = useMemo(
+    () => filteredTxs.some((t) => t.budget !== null),
+    [filteredTxs],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -352,15 +265,33 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
     }
   };
 
-  const handleExportReport = () => {
+  const handleExportExcel = async () => {
     if (filteredTxs.length === 0) {
       toast.info("Tidak ada transaksi terfilter untuk diekspor.");
       return;
     }
-    exportReportCsv(filteredTxs, dataset.fileName, currency, exchangeRate, filterDesc);
-    toast.success("Laporan CSV diunduh", {
-      description: `${filteredTxs.length} transaksi diekspor (template laporan).`,
-    });
+    setExportingExcel(true);
+    try {
+      await exportExcel({
+        txs: filteredTxs,
+        monthly,
+        fileName: dataset.fileName,
+        currency,
+        exchangeRate,
+        filterDesc,
+        hasBudget,
+      });
+      toast.success("Laporan Excel (.xlsx) diunduh", {
+        description: `${filteredTxs.length} transaksi · ${monthly.length} bulan (2 worksheet).`,
+      });
+    } catch (err) {
+      console.error("Gagal ekspor Excel:", err);
+      toast.error("Gagal membuat file Excel", {
+        description: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga.",
+      });
+    } finally {
+      setExportingExcel(false);
+    }
   };
 
   const handleExportRaw = () => {
@@ -477,7 +408,7 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
           {/* Input kurs IDR→USD (opsi 1): hanya muncul saat mode USD aktif.
               Nominal USD = IDR / kurs; tanpa API, client-side penuh. */}
           {currency === "USD" && <ExchangeRateInput />}
-          {/* Menu Ekspor: Salin Ringkasan + Cetak PDF + Ekspor CSV template laporan + data mentah (M6.1). */}
+          {/* Menu Ekspor: Salin Ringkasan + Cetak PDF + Ekspor Excel (.xlsx) + Data Mentah CSV. */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="flex items-center gap-1.5">
@@ -502,17 +433,18 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
                 Cetak PDF
               </button>
               <button
-                onClick={handleExportReport}
-                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer"
+                onClick={handleExportExcel}
+                disabled={exportingExcel}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                Ekspor CSV (Template Laporan)
+                <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                {exportingExcel ? "Menyiapkan Excel..." : "Ekspor Excel (.xlsx) - Laporan Rapi"}
               </button>
               <button
                 onClick={handleExportRaw}
                 className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-slate-50 cursor-pointer"
               >
-                <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                <FileText className="h-4 w-4 text-muted-foreground" />
                 Ekspor CSV (Data Mentah)
               </button>
             </PopoverContent>
