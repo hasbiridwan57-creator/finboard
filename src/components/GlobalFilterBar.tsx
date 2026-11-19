@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 function formatDate(iso: string): string {
+  if (!iso) return "—";
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("id-ID", {
     day: "numeric", month: "short", year: "numeric", timeZone: "UTC",

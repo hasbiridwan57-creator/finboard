@@ -171,7 +171,7 @@ function exportReportCsv(
     lines.push(
       [
         idx + 1,
-        format(new Date(t.date), "yyyy-MM-dd"),
+        t.date,
         t.category,
         t.department,
         t.channel,
@@ -296,6 +296,8 @@ export default function DashboardHeader({ onOpenMapping }: { onOpenMapping: () =
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Abaikan jika ada modifier — jangan ganggu shortcut OS/browser (Cmd+R, Ctrl+R, dll).
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (target) {
         const tag = target.tagName;
