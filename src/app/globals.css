@@ -83,7 +83,7 @@
 }
 @media (max-width: 767px) {
   .recharts-responsive-container {
-    height: 220px !important;
+    height: 240px !important;
   }
 }
 

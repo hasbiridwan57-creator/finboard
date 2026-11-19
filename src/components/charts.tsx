@@ -38,6 +38,30 @@ function useCurrency() {
   return currency;
 }
 
+/** Deteksi layar sempit (< 640px) untuk skala axis/label chart yang nyaman di HP. */
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isMobile;
+}
+
+/** Ukuran axis yang responsif: YAxis lebih ramping & label lebih besar di mobile. */
+function useAxisSizing(yAxisWidth = 85, yAxisCategoryWidth = 170) {
+  const isMobile = useIsMobile();
+  return {
+    isMobile,
+    yAxisWidth: isMobile ? 48 : yAxisWidth,
+    yAxisCategoryWidth: isMobile ? 120 : yAxisCategoryWidth,
+    axisTick: { fontSize: isMobile ? 12 : 11, fill: "#64748b" },
+  };
+}
+
 function EmptyChart({ msg }: { msg: string }) {
   return (
     <div className="flex h-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">
@@ -69,7 +93,7 @@ function Segmented<T extends string>({
           key={o.value}
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+          className={`min-h-11 rounded-md px-3 py-1 text-xs font-medium transition-colors cursor-pointer md:min-h-[36px] md:px-2.5 ${
             value === o.value
               ? "bg-surface text-foreground shadow-card"
               : "text-muted-foreground hover:text-foreground"
@@ -117,7 +141,7 @@ function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-surface-border bg-white p-5 shadow-card">
+    <div className="rounded-xl border border-surface-border bg-white p-4 shadow-card sm:p-5">
       <ChartCardHeader title={title} badge={badge} control={control} />
       {children}
       {note != null && <div className="mt-3">{note}</div>}
@@ -150,6 +174,7 @@ export function RevenueExpenseChart({
   defaultGranularity?: Granularity;
 }) {
   const currency = useCurrency();
+  const { yAxisWidth, axisTick } = useAxisSizing();
   const [gran, setGran] = useState<Granularity>(defaultGranularity);
   const [mode, setMode] = useState<"periodik" | "kumulatif">("periodik");
   useEffect(() => {
@@ -227,8 +252,8 @@ export function RevenueExpenseChart({
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={makeYAxisFormatter(currency)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
+          <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={false} minTickGap={16} padding={{ left: 4, right: 8 }} />
+          <YAxis tickFormatter={makeYAxisFormatter(currency)} tick={axisTick} tickLine={false} axisLine={false} width={yAxisWidth} />
           <Tooltip content={<ChartTooltip valueFormatter={(v) => formatCurrency(v, currency)} />} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#2563eb" strokeWidth={2} fill="url(#revGrad)" />
@@ -244,8 +269,9 @@ export function RevenueExpenseChart({
               label={{
                 value: "Rata-rata",
                 position: "insideTopRight",
-                fontSize: 10,
-                fill: "#64748b",
+                fontSize: 11,
+                fill: "#334155",
+                fontWeight: 600,
               }}
             />
           )}
@@ -258,6 +284,7 @@ export function RevenueExpenseChart({
 /** 2. Revenue vs Budget (kondisional) — PRD FR-CHR-2 */
 export function RevenueBudgetChart({ data }: { data: MonthlyPoint[] }) {
   const currency = useCurrency();
+  const { yAxisWidth, axisTick } = useAxisSizing();
   const withBudget = data.filter((d) => d.budget !== null && d.budget > 0);
   if (withBudget.length === 0) return null;
 
@@ -309,8 +336,8 @@ export function RevenueBudgetChart({ data }: { data: MonthlyPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={withBudget} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={makeYAxisFormatter(currency)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
+          <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={false} minTickGap={16} padding={{ left: 4, right: 8 }} />
+          <YAxis tickFormatter={makeYAxisFormatter(currency)} tick={axisTick} tickLine={false} axisLine={false} width={yAxisWidth} />
           <Tooltip content={<VarianceTooltip />} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar dataKey="revenue" name="Revenue Aktual" fill="#2563eb" radius={[4, 4, 0, 0]} />
@@ -342,6 +369,7 @@ function useMetricSwitch() {
 export function CategoryProfitChart({ data }: { data: DimensionMetricPoint[] }) {
   const [chartType, setChartType] = useState<"bar" | "donut">("bar");
   const currency = useCurrency();
+  const { yAxisWidth, axisTick } = useAxisSizing();
   const { filter, setFilter } = useFinBoardStore();
   const active = filter.categories;
   const { control, pick, metricName } = useMetricSwitch();
@@ -426,7 +454,7 @@ export function CategoryProfitChart({ data }: { data: DimensionMetricPoint[] }) 
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 11, fill: "#64748b" }}
+              tick={axisTick}
               tickLine={false}
               axisLine={false}
               interval={0}
@@ -434,7 +462,7 @@ export function CategoryProfitChart({ data }: { data: DimensionMetricPoint[] }) 
               textAnchor="end"
               height={50}
             />
-            <YAxis tickFormatter={makeYAxisFormatter(currency)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={85} />
+            <YAxis tickFormatter={makeYAxisFormatter(currency)} tick={axisTick} tickLine={false} axisLine={false} width={yAxisWidth} />
             <Tooltip content={<ChartTooltip valueFormatter={(v) => formatCurrency(v, currency)} />} cursor={{ fill: "#f1f5f9" }} />
             <Bar
               dataKey="value"
@@ -457,6 +485,7 @@ export function CategoryProfitChart({ data }: { data: DimensionMetricPoint[] }) 
 /** 4. Departemen (Horizontal Bar) + switcher metrik — PRD FR-CHR-4 + UI Bagian 5 */
 export function DepartmentProfitChart({ data }: { data: DimensionMetricPoint[] }) {
   const currency = useCurrency();
+  const { yAxisCategoryWidth, axisTick } = useAxisSizing();
   const { filter, setFilter } = useFinBoardStore();
   const active = filter.departments;
   const { control, pick, metricName } = useMetricSwitch();
@@ -477,8 +506,8 @@ export function DepartmentProfitChart({ data }: { data: DimensionMetricPoint[] }
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-          <XAxis type="number" tickFormatter={makeYAxisFormatter(currency)} tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} />
-          <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} axisLine={false} width={170} />
+          <XAxis type="number" tickFormatter={makeYAxisFormatter(currency)} tick={axisTick} tickLine={false} axisLine={false} />
+          <YAxis type="category" dataKey="name" tick={axisTick} tickLine={false} axisLine={false} width={yAxisCategoryWidth} />
           <Tooltip content={<ChartTooltip valueFormatter={(v) => formatCurrency(v, currency)} />} cursor={{ fill: "#f1f5f9" }} />
           <Bar
             dataKey="value"
